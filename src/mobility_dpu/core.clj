@@ -9,13 +9,23 @@
             [monger.collection :as mc]
             [monger.query :as mq]
             [monger.operators :as mo]
+            [mobility-dpu.spatial :as spatial]
+            [mobility-dpu.summary :as summary]
+            monger.joda-time
             )
   (:use [aprint.core])
-  (:import (org.joda.time DateTime)
+  (:import (org.joda.time DateTime ReadableDateTime LocalDate ReadablePartial ReadableInstant)
            (org.joda.time.format ISODateTimeFormat DateTimeFormatter DateTimeFormat)))
 
 
+
 (timbre/refer-timbre)
+
+; set encoder for JodaDateTime
+(cheshire.custom/add-encoder DateTime
+                             (fn [c jsonGenerator]
+                               (.writeString jsonGenerator (str c))))
+; date time parser that try all the possible formats
  (defn dt-parser [dt]
     (let [try-parse #(try (DateTime/parse %1 (.withOffsetParsed ^DateTimeFormatter %2)) (catch IllegalArgumentException _ nil))]
       (or (try-parse dt (ISODateTimeFormat/dateTime))
@@ -24,6 +34,23 @@
           )
       )
 )
+
+(defn recursive-time->str
+  "Covert all the Joda time objects contained in the given map to str"
+  [m]
+  (cond
+    (map? m)
+      (reduce (fn [m key]
+                (assoc m key (recursive-time->str (get m key)))
+                ) m (keys m))
+    (or (list? m) (vector? m))
+      (map recursive-time->str m)
+    (or (instance? ReadableInstant m) (instance? ReadablePartial m))
+    (str m)
+    :else
+    m
+    )
+  )
 
 
 (defn android-mobility [dat]
@@ -63,27 +90,14 @@
         (hmm/to-inferred-segments segments transition-matrix emission-prob pi)
         ))
 
-
-
-
-(comment
-  (and (= sensed-act :unknown) (= speed nil))
-  0.25
-  (and (= sensed-act :unknown) (> speed 8))
-  ({:still 0.01 :on_foot 0.19 :in_vehicle 0.70 :on_bicycle 0.10} hidden-act)
-  (and (= sensed-act :unknown) (> speed 3))
-  ({:still 0.01 :on_foot 0.24 :in_vehicle 0.60 :on_bicycle 0.15} hidden-act)
-  (and (= sensed-act :unknown) (> speed 0.0))
-  ({:still 0.01 :on_foot 0.34 :in_vehicle 0.40 :on_bicycle 0.25} hidden-act)
-  (and (= sensed-act :unknown) (<= speed 0.0))
-  ({:still 0.70 :on_foot 0.10 :in_vehicle 0.19 :on_bicycle 0.01} hidden-act))
-
 (defn ios-mobility [dat locations]
     (let [_ (aprint (first locations))
-
+          ; some records use "horizontal_accuracy". change all of them to "accuracy"
           locations (map #(assoc-in % [:location :accuracy] (or (get-in % [:location :horizontal_accuracy])
                                                                 (get-in % [:location :accuracy]))) locations)
+          ; remove the location samples that have low accuracy
           locations (filter #(< (get-in % [:location :accuracy]) 75) locations)
+          ; compute the max-gps-speed since two minute ago for each activity sample. (this feature is not used.)
           dat
           (loop [[{:keys [timestamp] :as spl} & rest-spl] dat
                  locations locations
@@ -100,6 +114,7 @@
               ret)
 
             )
+
           dat (apply vector (map (fn [d]
                                    (let [{:keys [activity confidence]} (first (:activities d))]
                                      (assoc d :data
@@ -114,6 +129,7 @@
            [:on_foot :still]  0.06 [:on_foot  :in_vehicle] 0.02 [:on_foot  :on_bicycle] 0.02
            [:in_vehicle :still]  0.005 [:in_vehicle :on_foot] 0.09 [:in_vehicle :on_bicycle] 0.005
            [:on_bicycle :still]  0.005 [:on_bicycle :on_foot] 0.09 [:on_bicycle :in_vehicle] 0.005}
+          ; map iOS activity names to canonical activity names
           activity-mapping
                   {:transport :in_vehicle
                    :cycling :on_bicycle
@@ -122,13 +138,17 @@
                    :walk :on_foot
                    :still :still
                    :unknown :unknown}
+          ; map iOS probability to numerical value
           prob-mapping
           {:low 0.5
            :high  0.99
            :medium 0.75
            }
 
-; emission probability (i.e. prob of observing y given x=activity) where x is the real (but unknown) state
+          ; emission probability (i.e. prob of observing y given x=activity) where x is the real hidden state
+          ; current implementation use
+          ; 1) the sampled confidence if x == the sampled activity,
+          ; 2) and (1-confidence) / 3 for other activities
           emission-prob
           (fn [hidden-act y]
              (let [[sensed-act conf] (:activity y)
@@ -138,8 +158,6 @@
                (if (= sensed-act hidden-act)
                  conf
                  (/ (- 1 conf) 3))
-
-
                )
             )
           ; initial pi
@@ -168,13 +186,9 @@
                 ret)
               )
           act-loc (hmm/merge-segments-with-location inferred-segments locations)
-          act-loc (map (fn [{:keys [locations] :as %}]
-                         (cond-> %
-                                 (and (seq locations) (not (= (:inferred-activity %) :still)))
-                                 (assoc :locations (hmm/kalman-filter locations 4))
-                                 )) act-loc)
           act-loc (filter #(> (:duration-in-seconds %) 0) act-loc)
           ]
+      ; FIXME not sure if the following function is needed anymore.
       (map (fn [{:keys [displacement-speed inferred-activity duration-in-seconds] :as seg}]
              ; deal with subway cases
              (if (and (= inferred-activity :still)
@@ -197,7 +211,7 @@
                          {"header.schema_id.name" "mobility-stream-iOS"}
                          )]
   ; for each user
-  (doseq [user users]
+  (for [user users]
     ; prepare data
     (let [act-dat (mq/with-collection db coll
                                   (mq/find {"header.schema_id.name" "mobility-stream-iOS"
@@ -226,13 +240,18 @@
           segments (ios-mobility (sort-by :timestamp act-dat)
                                  (sort-by :timestamp loc-dat))
 
+          summaries (summary/summarize segments)
+          summaries-datapoints (map #(summary/summary->datapoint % user "iOS") summaries)
           ]
-
-          (spit (str user ".json") (cheshire.custom/generate-string segments))
+         (when (seq summaries-datapoints)
+           (let [removed (mc/remove db coll {:user_id user "header.schema_id.name" (-> summaries-datapoints
+                                                                                       first
+                                                                                       (get-in ["header" "schema_id" "name"]))})
+                 inserted (mc/insert-batch db coll (recursive-time->str summaries-datapoints))]
+             (aprint summaries-datapoints)
+             (info "Remove" removed "Insert" inserted))
+           )
       )
-
-
     )
-
   )
 

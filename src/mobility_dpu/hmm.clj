@@ -1,10 +1,14 @@
 (ns mobility-dpu.hmm
   (:require [taoensso.timbre :as timbre]
-            [clj-time.core :as t]))
+            [clj-time.core :as t]
+            [mobility-dpu.spatial :as spatial]))
 
 (timbre/refer-timbre)
 
-(defn hmm [dat transition-matrix prob-y-given-x first-x-prob]
+(defn hmm
+  "Apply Hidden Makov Model to smooth the activity samples
+  See: http://en.wikipedia.org/wiki/Baum%E2%80%93Welch_algorithm"
+  [dat transition-matrix prob-y-given-x first-x-prob]
   (let [; observations
         Y (map :data dat)
         ; times
@@ -119,7 +123,12 @@
 
     (filter #(> (count %) 1) segments)
     ))
-(defn to-inferred-segments [segments transition-matrix prob-y-given-x first-x-prob]
+
+
+(defn to-inferred-segments
+  "Apply HMM to each activity sample segments and create activity segments,
+  where consecutive samples with the same inferred activity are merged into one segments"
+  [segments transition-matrix prob-y-given-x first-x-prob]
   (mapcat (fn [segment]
             (let [act-segments (partition-by :inferred-activity (hmm segment transition-matrix prob-y-given-x first-x-prob))]
               (for [seg act-segments]
@@ -137,99 +146,12 @@
   )
 
 
-(defn haversine
-  [{lon1 :longitude lat1 :latitude} {lon2 :longitude lat2 :latitude}]
-  (let [R 6372.8 ; kilometers
-        dlat (Math/toRadians (- lat2 lat1))
-        dlon (Math/toRadians (- lon2 lon1))
-        lat1 (Math/toRadians lat1)
-        lat2 (Math/toRadians lat2)
-        a (+ (* (Math/sin (/ dlat 2)) (Math/sin (/ dlat 2))) (* (Math/sin (/ dlon 2)) (Math/sin (/ dlon 2)) (Math/cos lat1) (Math/cos lat2)))]
-    (* R 2 (Math/asin (Math/sqrt a)))))
-;
-;var initLoc = locations[0];
-;var time = moment.parseZone(initLoc.timestamp).valueOf();
-;var lat = initLoc.location.latitude;
-;var lng = initLoc.location.longitude;
-;initLoc.location.filterLatitude = lat;
-;initLoc.location.filterLongitude = lng;
-;var accuracy = initLoc.location.horizontal_accuracy ? initLoc.location.horizontal_accuracy : initLoc.location.accuracy;
-;var variance = accuracy * accuracy;
-;
-;for(var i=1; i<locations.length; i++){
-;        var cur = locations[i];
-;        var speed =  cur.location.speed > 4 ? cur.location.speed : 4;
-;var newLat = cur.location.latitude;
-;var newLng = cur.location.longitude;
-;var newTime = moment.parseZone(cur.timestamp).valueOf();
-;var newAccuracy = cur.location.horizontal_accuracy ? cur.location.horizontal_accuracy : cur.location.accuracy;
-;var timediff =  newTime - time;
-;variance += timediff * speed * speed / 1000.0;
-;// Kalman gain matrix K = Covarariance * Inverse(Covariance + MeasurementVariance)
-;var k = variance / (variance + (newAccuracy * newAccuracy))
-;lat += k * (newLat - lat);
-;lng += k * (newLng - lng);
-;time = newTime;
-;cur.location.filterLatitude = lat;
-;cur.location.filterLongitude = lng;
-;variance = (1-k) * variance;
-;
-;return locations;
-(defn kalman-filter
-  [locs min-speed]
-
-  (let [f (first locs)
-        lat (get-in f [:location :latitude])
-        lng (get-in f [:location :longitude])
-        accuracy (get-in f [:location :accuracy])
-        var (* accuracy accuracy)
-        time (:timestamp f)
-        init-ret [(-> f
-                      (assoc-in [:location :filtered-latitude] lat)
-                      (assoc-in [:location :filtered-longitude] lng)
-                      )]
-        ]
-    (loop [[cur & locs] (rest locs) lat lat lng lng var var time time ret init-ret]
-      (if cur
-        (let [cur-lat (get-in cur [:location :latitude])
-              cur-lng (get-in cur [:location :longitude])
-              accuracy (get-in cur [:location :accuracy])
-              speed (get-in cur [:location :speed])
-              speed (max speed min-speed)
-              cur-time  (:timestamp cur)]
-          (let [time-diff (/ (t/in-millis (t/interval time cur-time)) 1000.0)
-                var (+ var (* time-diff speed speed))
-                k (/ var (+ var (* accuracy accuracy)))
-                lat (+ lat (* k (- cur-lat lat)))
-                lng (+ lng (* k (- cur-lng lng)))
-                var (* (- 1 k) var)]
-            (recur locs lat lng var cur-time
-                   (conj ret (-> cur
-                                 (assoc-in [:location :filtered-latitude] lat)
-                                 (assoc-in [:location :filtered-longitude] lng)
-                                 )))
-            )
-
-          )
-        ret)
-      )
-
-    ))
 
 
-(defn median-location
-  [locs]
-  (if (seq locs)
-    (let [middle (/ (count locs) 2)
-          lats (sort (map (comp :latitude :location) locs))
-          lngs (sort (map (comp :longitude :location) locs))]
-      {:latitude (nth lats middle)
-       :longitude (nth lngs middle)}
-      )
-    nil)
-  )
 
-(defn merge-segments-with-location [segments locations]
+(defn merge-segments-with-location
+  "Merge the activity segments with the location samples based on timestamps"
+  [segments locations]
   (loop [[{:keys [start end] :as seg} & rest-segments] segments
          locations locations
          ret []]
@@ -240,9 +162,8 @@
                                       locations)
             f-loc (:location (first within))
             l-loc (:location (last within))
-            location->str #(if % (str (:latitude %) "," (:longitude %)))
             distance (if (seq within)
-                       (haversine f-loc l-loc ) )
+                       (spatial/haversine f-loc l-loc ) )
             avg-gps-speed (if (seq within)
                             (/ (apply + (filter identity (map (comp :speed :location) locations))) (count locations)))
             duration (t/in-seconds (t/interval start end))
@@ -252,9 +173,9 @@
                            :distance distance
                            :avg-gps-speed avg-gps-speed
                            :displacement-speed displacement-speed
-                           :first-location (location->str f-loc)
-                           :last-location (location->str l-loc)
-                           :median-location (location->str (median-location within))
+                           :first-location f-loc
+                           :last-location l-loc
+                           :median-location (spatial/median-location within)
                            :duration-in-seconds duration
                            )]
         (recur rest-segments over (conj ret seg))
