@@ -16,7 +16,6 @@
                                       (mq/find {"header.schema_id.name" "mobility-stream-iOS"
                                                 :user_id user
                                                 "body.activities" {mo/$exists true}})
-                                      (mq/sort {"header.creation_date_time" 1})
                                       (mq/keywordize-fields true)
                                       )
 
@@ -38,7 +37,6 @@
                                        (mq/find {"header.schema_id.name" "mobility-stream-iOS"
                                                  :user_id user
                                                  "body.location" {mo/$exists true}})
-                                       (mq/sort {"header.creation_date_time" 1})
                                        (mq/keywordize-fields true)
                                        )
           loc-dat (for [dp loc-dat]

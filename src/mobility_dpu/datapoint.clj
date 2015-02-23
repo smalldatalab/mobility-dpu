@@ -22,7 +22,7 @@
 (defn datapoint-template [user device type date creation-datetime body]
   (let [id (str "mobility-daily-" type "-" user "-" date "-" (clojure.string/lower-case device))]
     (recursive-time->str
-      {"_id" id
+      {:_id id
        "_class"  "org.openmhealth.dsu.domain.DataPoint"
        "user_id" user
        "header" { "_id" id,
@@ -37,6 +37,9 @@
        }
       )
     )
+
+
+
 
   )
 (defn daily-datapoint-template [user device type daily-summary body]

@@ -10,13 +10,11 @@
     (let [act-dat (mq/with-collection db coll
                                       (mq/find {"header.schema_id.name" "mobility"
                                                 :user_id user})
-                                      (mq/sort {"header.creation_date_time" 1})
                                       (mq/keywordize-fields true))
           nomalize-act (fn [act] (let [act (keyword (clojure.string/lower-case act))]
                                    (if (= act :walking)
                                      :on_foot
-                                     act)
-                                   ))
+                                     act)))
 
           ]
       (for [dp act-dat]
@@ -31,7 +29,6 @@
     (let [loc-dat  (mq/with-collection db coll
                                        (mq/find {"header.schema_id.name" "location"
                                                  :user_id user})
-                                       (mq/sort {"header.creation_date_time" 1})
                                        (mq/keywordize-fields true)
                                        )]
       (for [dp loc-dat]
