@@ -3,7 +3,7 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :main ^:skip-aot mobility-dpu.core
+  :main ^:skip-aot mobility-dpu.main
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
   :resource-paths ["/home/changun/Desktop/inflib.jar"]

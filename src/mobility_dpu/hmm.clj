@@ -100,7 +100,7 @@
     ))
 
 
-(defn downsample-and-segment [dat]
+(defn downsample-and-segment-by-gaps [dat]
   (let [; filter out too frequent samples
         dat (map (fn [cur last] (assoc cur :gap (t/in-seconds (t/interval (:timestamp last) (:timestamp cur) ))))
                  dat (concat [(first dat)] (butlast dat)))
@@ -120,9 +120,7 @@
               )
             )
         ]
-
-    (filter #(> (count %) 1) segments)
-    ))
+    (filter #(> (count %) 1) segments)))
 
 
 (defn to-inferred-segments
@@ -142,11 +140,7 @@
                   )
                 )
               )
-            ) segments)
-  )
-
-
-
+            ) segments))
 
 
 (defn merge-segments-with-location

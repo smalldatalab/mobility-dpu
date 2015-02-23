@@ -11,26 +11,41 @@
 (defn group-by-day
   "Group segments by days. A segment can belong to mutiple days if it covers the time range across more than one days"
   [segs]
-  (if (seq segs)
-    (loop [segs segs cur-date (c/to-local-date (:start (first segs))) cur-group [] groups []]
-      (let [seg (first segs)
-            end-date (c/to-local-date (:end seg))
-            start-date (c/to-local-date (:start seg))]
-        (if seg
-          (cond
-            (t/after? start-date cur-date)
-            (recur segs start-date [] (conj groups [cur-date cur-group]))
-            (t/after? end-date cur-date)
-            (recur segs (t/plus cur-date (t/days 1)) [] (conj groups [cur-date (conj cur-group seg)]))
-            :else
-            (recur (rest segs) cur-date  (conj cur-group seg) groups)
+  (let [seg->times
+        (fn [seg]
+          (let [seg-date (c/to-local-date (:start seg))
+                seg-zone (.getZone ^DateTime (:start seg))
+                end-of-seg-date (.toDateTimeAtStartOfDay ^LocalDate  (t/plus seg-date (t/days 1)) seg-zone)]
+            [seg-date end-of-seg-date]
+            ))]
+    (if (seq segs)
+      (loop [segs segs
+             times (seg->times (first segs))
+             group [] groups []]
+        (let [[group-date end-of-group-date] times
+              seg (first segs)
+              seg-start-time (:start seg)
+              seg-end-time (:end seg)]
+          (if seg
+            (cond
+              ; the whole segment is ahead the group
+              (t/after? seg-start-time end-of-group-date)
+              (recur segs (seg->times seg) [] (conj groups [group-date group]))
+              ; some part of segment is beyond the time range of the group
+              (t/after? seg-end-time end-of-group-date)
+              (recur segs (map #(t/plus % (t/days 1)) times) [] (conj groups [group-date (conj group seg)]))
+              ; within the group
+              :else
+              (recur (rest segs)  times (conj group seg) groups)
+              )
+            (conj groups [group-date group])
             )
-          (conj groups [cur-date cur-group])
           )
         )
+      []
       )
-    []
     )
+
   )
 
 
@@ -137,7 +152,11 @@
   [date segs]
   (let [zone (.getZone ^DateTime (:start (first segs)))
         start-of-date (.toDateTimeAtStartOfDay ^LocalDate date zone)
-        end-of-date (.toDateTimeAtStartOfDay ^LocalDate  (t/plus date (t/days 1)) zone)
+        end-of-date (-> date
+                        ^LocalDate (t/plus (t/days 1))
+                        (.toDateTimeAtStartOfDay zone)
+                        (t/minus (t/millis 1))
+                        )
         ]
     (map (fn [{:keys [start end] :as %}]
            (assoc % :start
@@ -155,33 +174,27 @@
 (defn summarize [segs]
     (for [[date day-segs] (group-by-day segs)]
       (let [day-segs (trim-date-time date day-segs)]
+        {:date date
+         :summary
+         (merge
+            {
+             :geodiameter_in_km (geodiameter-in-km day-segs)
+             :walking_distance_in_km (walking-distance-in-km day-segs)
+             :active_time_in_seconds (active-time-in-seconds day-segs)
+             :max_gait_speed_in_meter_per_second (max-gait-speed day-segs)
+             :coverage (coverage date day-segs)
 
-        (merge
-          {:date date
-           :geodiameter_in_km (geodiameter-in-km day-segs)
-           :walking_distance_in_km (walking-distance-in-km day-segs)
-           :active_time_in_seconds (active-time-in-seconds day-segs)
-           :max_gait_speed_in_meter_per_second (max-gait-speed day-segs)
-           :coverage (coverage date day-segs)}
-          (infer-home day-segs)
-          )
+             }
+            (infer-home day-segs)
+         )
+         :segments day-segs
+         }
+
         )
 
       )
   )
 
-(defn summary->datapoint [m user source]
-  {"_class"  "org.openmhealth.dsu.domain.DataPoint"
-   "user_id" user
-   "header" { "_id" (str "Mobility-Daily-Summary-" user "-" (:date m)),
-            "schema_id" { "namespace"  "cornell",
-                         "name"  "mobility-daily-summary",
-                         "version" { "major"  1, "minor"  0 } },
-                         "creation_date_time" (t/now),
-                         "acquisition_provenance" { "source_name" (str "Mobility-DPU-v1.0-" source),
-                                                   "modality" "COMPUTED" } },
-   "body" m
-   })
 
 
 (defn debug-mesg [segs]
