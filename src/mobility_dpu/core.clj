@@ -10,6 +10,7 @@
   (:use [aprint.core])
   )
 
+(timbre/refer-timbre)
 
 
 (defprotocol Segmentor
@@ -23,13 +24,12 @@
   )
 
 
-(timbre/refer-timbre)
 
 
 
-
-
-(defn segments->datapoints [segmentor user segments]
+(defn segments->datapoints
+  "Generate mobility summary/segments data points from segments"
+  [segmentor user segments]
   (let [daily-summaries (summary/summarize segments)]
     (concat
       (map #(daily-segments-datapoint user (source-name segmentor) %) daily-summaries)
@@ -39,19 +39,26 @@
   )
 
 
-(defn segmentation [segmentor user]
+(defn segmentation
+  "Segment a user's data using the given segmentor"
+  [segmentor user]
       (let [act-dat (sort-by :timestamp (get-activity-dat segmentor user))
             loc-dat (sort-by :timestamp (get-location-dat segmentor user))
             ; remove the location samples that have low accuracy
             locations (filter #(< (get-in % [:location :accuracy]) 75) loc-dat)
+            ; break data points into small segments by gaps
             segments (hmm/downsample-and-segment-by-gaps act-dat)
+            ; further break a segment into activity segments, each of which represent a continuos activity episode
             inferred-segments (hmm/to-inferred-segments segments
                                                         (transition-matrix segmentor)
                                                         #(emission-prob segmentor %1 %2)
                                                         (init-pi segmentor))
+            ; execure the post process function
             inferred-segments (post-process segmentor inferred-segments)
+            ; merge activity segments with location datapoints by time
             inferred-segments (hmm/merge-segments-with-location inferred-segments locations)
             ]
+        ; remove those 0-second segment.
         (filter #(> (:duration-in-seconds %) 0) inferred-segments)
 
 ))

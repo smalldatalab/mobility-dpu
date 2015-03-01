@@ -42,6 +42,8 @@
      [:in_vehicle :still]  0.005 [:in_vehicle :on_foot] 0.09 [:in_vehicle :on_bicycle] 0.005
      [:on_bicycle :still]  0.005 [:on_bicycle :on_foot] 0.09 [:on_bicycle :in_vehicle] 0.005})
   (emission-prob [this hidden obs]
+    "Each hidden state E's prob = prob of E given in the observation + a portion of prob of Tilting & Unknown prob
+      Still state will get larger portion from Unknown prob, but smaller portion from Tilting prob"
     (let [tilting (/ (or (:tilting obs) 0) 7.0)
           unknown (/ (or (:unknown obs) 0) 5.0)]
       (/ (+ (if (= hidden :still)

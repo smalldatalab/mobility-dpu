@@ -3,7 +3,7 @@
   (:import (org.joda.time ReadableInstant ReadablePartial)))
 
 (defn recursive-time->str
-  "Covert all the Joda time objects contained in the given map to str"
+  "Convert all the Joda time objects in the given map to str"
   [m]
   (cond
     (map? m)
@@ -32,7 +32,7 @@
                  "creation_date_time" creation-datetime,
                  "creation_date_time_epoch_milli" (c/to-long creation-datetime)
                  "acquisition_provenance" { "source_name" (str "Mobility-DPU-v1.0-" device),
-                                           "modality" "COMPUTED" } },
+                                           "modality" "SENSED" } },
        "body" body
        }
       )

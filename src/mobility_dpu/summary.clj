@@ -9,7 +9,7 @@
 (timbre/refer-timbre)
 
 (defn group-by-day
-  "Group segments by days. A segment can belong to mutiple days if it covers the time range across more than one days"
+  "Group segments by days. A segment can belong to mutiple groups if it covers a time range across more than one days"
   [segs]
   (let [seg->times
         (fn [seg]
@@ -30,13 +30,13 @@
             (cond
               ; the whole segment is ahead the group
               (t/after? seg-start-time end-of-group-date)
-              (recur segs (seg->times seg) [] (conj groups [group-date group]))
+                   (recur segs (seg->times seg) [] (conj groups [group-date group]))
               ; some part of segment is beyond the time range of the group
               (t/after? seg-end-time end-of-group-date)
-              (recur segs (map #(t/plus % (t/days 1)) times) [] (conj groups [group-date (conj group seg)]))
+                   (recur segs (map #(t/plus % (t/days 1)) times) [] (conj groups [group-date (conj group seg)]))
               ; within the group
               :else
-              (recur (rest segs)  times (conj group seg) groups)
+                   (recur (rest segs)  times (conj group seg) groups)
               )
             (conj groups [group-date group])
             )
@@ -48,6 +48,28 @@
 
   )
 
+(defn trim-date-time
+  "Trim the time range of the segments if their start/end time are before/after the time of the given date"
+  [date segs]
+  (let [zone (.getZone ^DateTime (:start (first segs)))
+        start-of-date (.toDateTimeAtStartOfDay ^LocalDate date zone)
+        end-of-date (-> date
+                        ^LocalDate (t/plus (t/days 1))
+                        (.toDateTimeAtStartOfDay zone)
+                        (t/minus (t/millis 1))
+                        )
+        ]
+    (for [{:keys [start end] :as %} segs]
+      (assoc % :start
+               (if (t/before? start start-of-date)
+                 start-of-date start)
+               :end
+               (if (t/after? end end-of-date)
+                 end-of-date end))
+      )
+    )
+  )
+
 
 (defn infer-home
   "Given a day of segments, return
@@ -55,31 +77,30 @@
   2) time not at home in seconds,
   and 3) home location"
   [segs]
-  (if (and (:median-location (first segs)) (:median-location (last segs)))
-    (let [dist-between-first-last (spatial/haversine (:median-location (first segs))
-                                                     (:median-location (last segs)))
-          segs (filter :median-location segs)
-          ]
+  (let [first-loc (:median-location (first segs)) last-loc (:median-location (last segs))]
+    (if (and  first-loc last-loc)
+      (let [dist-between-first-last (spatial/haversine first-loc last-loc)
+            segs (filter :median-location segs)]
 
-      (if (< dist-between-first-last 0.2)
-        (let [at-home? #(< (spatial/haversine(:median-location (first segs))
-                                             (:median-location %))
-                           0.2)
-              after-leave-home (drop-while at-home? segs)
-              leave-home (:start (first after-leave-home))
-              [after-return-home before-return-home] (map reverse (split-with at-home? (reverse after-leave-home)))
-              return-home (:start (first after-return-home))
-              back-home-seconds (apply + 0 (map :duration-in-seconds (filter at-home? before-return-home)))
-              ]
-          {:home (:median-location (first segs))
-           :leave_home_time leave-home
-           :return_home_time return-home
-           :time_not_at_home_in_seconds (if leave-home (- (t/in-seconds (t/interval leave-home return-home)) back-home-seconds)
-                                            0)
-           })
-        (do (info (str "Distance between the first-last is too high:" dist-between-first-last))
-            {}
-            )
+        (if (< dist-between-first-last 0.2)
+          (let [at-home? #(< (spatial/haversine first-loc  (:median-location %)) 0.2)
+                after-leave-home (drop-while at-home? segs)
+                leave-home (:start (first after-leave-home))
+
+                [after-return-home before-return-home] (map reverse (split-with at-home? (reverse after-leave-home)))
+                return-home (:start (first after-return-home))
+                back-home-seconds (apply + 0 (map :duration-in-seconds (filter at-home? before-return-home)))
+                ]
+            {:home first-loc
+             :leave_home_time leave-home
+             :return_home_time return-home
+             :time_not_at_home_in_seconds (if leave-home (- (t/in-seconds (t/interval leave-home return-home)) back-home-seconds)
+                                                         0)
+             })
+          (do (info (str "Distance between the first-last is too high:" dist-between-first-last))
+              {}
+              )
+          )
         )
       )
     )
@@ -147,29 +168,7 @@
      (/ seconds (t/in-seconds (t/interval start-of-date end-of-date)))
      )
   )
-(defn trim-date-time
-  "Trim the time range of the segments if their start/end time are before/after the time of the given date"
-  [date segs]
-  (let [zone (.getZone ^DateTime (:start (first segs)))
-        start-of-date (.toDateTimeAtStartOfDay ^LocalDate date zone)
-        end-of-date (-> date
-                        ^LocalDate (t/plus (t/days 1))
-                        (.toDateTimeAtStartOfDay zone)
-                        (t/minus (t/millis 1))
-                        )
-        ]
-    (map (fn [{:keys [start end] :as %}]
-           (assoc % :start
-                    (if (t/before? start start-of-date)
-                      start-of-date start)
-                    :end
-                    (if (t/after? end end-of-date)
-                      end-of-date end))
-           )
-         segs
-         )
-    )
-  )
+
 
 (defn summarize [segs]
     (for [[date day-segs] (group-by-day segs)]
