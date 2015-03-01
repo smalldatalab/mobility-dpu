@@ -1,36 +1,20 @@
 # mobility-dpu
 
-FIXME: description
+**Mobility DPU** aggregates the raw activity and location sensor data from collected by phones (iOS or Android) and generate more meaningful activity episodes and daily mobility summary.
 
-## Installation
-
-Download from http://example.com/FIXME.
+# Workflow
+    * Query activity and location data streams from MongoDB
+    * Break activity data streams into segments
+    * Apply a Hidden Markov Chain model to smooth activity sequence
+    * Divide segments into activity episodes, each of which is a sequence of consecutive samples with the same inferred activity
+    * Merge activity episodes with location data based on time
+    * Calculate daily summaries
+ 
+               
 
 ## Usage
 
-FIXME: explanation
-
-    $ java -jar mobility-dpu-0.1.0-standalone.jar [args]
-
-## Options
-
-FIXME: listing of options this app accepts.
-
-## Examples
-
-...
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
-
-## License
-
-Copyright © 2015 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+* The DPU generates and saves new data points every 10 minutes
+```bash
+    $ java -jar mobility-dpu-0.1.0-standalone.jar
+```

@@ -8,14 +8,14 @@
             [mobility-dpu.android])
   (:import (mobility_dpu.android AndroidSegmentor)
            (mobility_dpu.ios iOSSegmentor)
-           (java.util.concurrent TimeUnit Executors ScheduledExecutorService)))
+           ))
 
 
 (timbre/refer-timbre)
 
 
 (defn -main
-  "The application's main function"
+  "The application's main function. Run Android and iOS segmentor for each user's data."
   [& args]
 
   (let [conn (mg/connect)
@@ -25,16 +25,16 @@
       (let [
             ; segmentors for Android and iOS
             segmentors [(AndroidSegmentor. db coll) (iOSSegmentor. db coll)]
-            ; get users with ios mobility data
-            users (mc/distinct db "dataPoint"
-                               "user_id" {})
-
+            ; get all the users
+            users (mc/distinct db coll "user_id" {})
             ]
+        ; run each segmentor over each user's data
         (doseq [segmentor segmentors user users]
           (info user segmentor)
           (try
             (let [segments (segmentation segmentor user)
                   datapoints (segments->datapoints segmentor user segments)]
+              ; save (or replace) the generated data points to mongo db
               (doseq [dp datapoints]
                 (mc/save-and-return db coll dp)
                 )
