@@ -8,67 +8,8 @@
 
 (timbre/refer-timbre)
 
-(defn group-by-day
-  "Group segments by days. A segment can belong to mutiple groups if it covers a time range across more than one days"
-  [segs]
-  (let [seg->times
-        (fn [seg]
-          (let [seg-date (c/to-local-date (:start seg))
-                seg-zone (.getZone ^DateTime (:start seg))
-                end-of-seg-date (.toDateTimeAtStartOfDay ^LocalDate  (t/plus seg-date (t/days 1)) seg-zone)]
-            [seg-date end-of-seg-date]
-            ))]
-    (if (seq segs)
-      (loop [segs segs
-             times (seg->times (first segs))
-             group [] groups []]
-        (let [[group-date end-of-group-date] times
-              seg (first segs)
-              seg-start-time (:start seg)
-              seg-end-time (:end seg)]
-          (if seg
-            (cond
-              ; the whole segment is ahead the group
-              (t/after? seg-start-time end-of-group-date)
-                   (recur segs (seg->times seg) [] (conj groups [group-date group]))
-              ; some part of segment is beyond the time range of the group
-              (t/after? seg-end-time end-of-group-date)
-                   (recur segs (map #(t/plus % (t/days 1)) times) [] (conj groups [group-date (conj group seg)]))
-              ; within the group
-              :else
-                   (recur (rest segs)  times (conj group seg) groups)
-              )
-            (conj groups [group-date group])
-            )
-          )
-        )
-      []
-      )
-    )
 
-  )
 
-(defn trim-date-time
-  "Trim the time range of the segments if their start/end time are before/after the time of the given date"
-  [date segs]
-  (let [zone (.getZone ^DateTime (:start (first segs)))
-        start-of-date (.toDateTimeAtStartOfDay ^LocalDate date zone)
-        end-of-date (-> date
-                        ^LocalDate (t/plus (t/days 1))
-                        (.toDateTimeAtStartOfDay zone)
-                        (t/minus (t/millis 1))
-                        )
-        ]
-    (for [{:keys [start end] :as %} segs]
-      (assoc % :start
-               (if (t/before? start start-of-date)
-                 start-of-date start)
-               :end
-               (if (t/after? end end-of-date)
-                 end-of-date end))
-      )
-    )
-  )
 
 
 (defn infer-home
@@ -170,28 +111,17 @@
   )
 
 
-(defn summarize [segs]
-    (for [[date day-segs] (group-by-day segs)]
-      (let [day-segs (trim-date-time date day-segs)]
-        {:date date
-         :summary
-         (merge
-            {
-             :geodiameter_in_km (geodiameter-in-km day-segs)
-             :walking_distance_in_km (walking-distance-in-km day-segs)
-             :active_time_in_seconds (active-time-in-seconds day-segs)
-             :max_gait_speed_in_meter_per_second (max-gait-speed day-segs)
-             :coverage (coverage date day-segs)
-
-             }
-            (infer-home day-segs)
-         )
-         :segments day-segs
-         }
-
-        )
-
-      )
+(defn summarize [date daily-segments]
+  (merge
+    {
+     :geodiameter_in_km (geodiameter-in-km daily-segments)
+     :walking_distance_in_km (walking-distance-in-km daily-segments)
+     :active_time_in_seconds (active-time-in-seconds daily-segments)
+     :max_gait_speed_in_meter_per_second (max-gait-speed daily-segments)
+     :coverage (coverage date daily-segments)
+     }
+    (infer-home daily-segments)
+    )
   )
 
 

@@ -42,26 +42,25 @@
 
 
   )
-(defn daily-datapoint-template [user device type daily-summary body]
+(defn daily-datapoint-template [user device type date creation-date-time body]
   (datapoint-template user device type
-                      (:date daily-summary)
-                      (-> daily-summary
-                          (:segments)
-                          last
-                          :end)
-                      (assoc body :device device)
+                      date
+                      creation-date-time
+                      (assoc body :device device  :date date)
                       )
   )
-(defn daily-summary-datapoint [user device daily-summary]
+(defn daily-summary-datapoint [user device date daily-summary creation-date-time]
   (daily-datapoint-template user device "summary"
+                            date
+                            creation-date-time
                             daily-summary
-                            (assoc (:summary daily-summary) :date (:date daily-summary))
                             )
   )
 
-(defn daily-segments-datapoint [user device daily-summary]
+(defn daily-segments-datapoint [user device date daily-segments creation-date-time]
   (daily-datapoint-template user device "segments"
-                            daily-summary
-                            {:segments (:segments daily-summary) :date (:date daily-summary)}
+                            date
+                            creation-date-time
+                            {:segments daily-segments}
                             )
   )

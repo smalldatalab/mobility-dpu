@@ -27,21 +27,13 @@
 
 
 
-(defn segments->datapoints
-  "Generate mobility summary/segments data points from segments"
-  [segmentor user segments]
-  (let [daily-summaries (summary/summarize segments)]
-    (concat
-      (map #(daily-segments-datapoint user (source-name segmentor) %) daily-summaries)
-      (map #(daily-summary-datapoint user (source-name segmentor) %) daily-summaries)
-      )
-    )
-  )
+
 
 
 (defn segmentation
   "Segment a user's data using the given segmentor"
   [segmentor user]
+
       (let [act-dat (sort-by :timestamp (get-activity-dat segmentor user))
             loc-dat (sort-by :timestamp (get-location-dat segmentor user))
             ; remove the location samples that have low accuracy
