@@ -1,13 +1,16 @@
 (ns mobility-dpu.spatial
-  (:require [clj-time.core :as t]))
+  (:require [clj-time.core :as t])
+  (:use [mobility-dpu.protocols]
+        [aprint.core])
+  (:import (mobility_dpu.protocols LocationSample)))
 
 (defn haversine
-  [{lon1 :longitude lat1 :latitude} {lon2 :longitude lat2 :latitude}]
+  [a b]
   (let [R 6372.8 ; kilometers
-        dlat (Math/toRadians (- lat2 lat1))
-        dlon (Math/toRadians (- lon2 lon1))
-        lat1 (Math/toRadians lat1)
-        lat2 (Math/toRadians lat2)
+        dlat (Math/toRadians (- (latitude b) (latitude a)))
+        dlon (Math/toRadians (- (longitude b) (longitude a)))
+        lat1 (Math/toRadians (latitude a))
+        lat2 (Math/toRadians (latitude b))
         a (+ (* (Math/sin (/ dlat 2)) (Math/sin (/ dlat 2))) (* (Math/sin (/ dlon 2)) (Math/sin (/ dlon 2)) (Math/cos lat1) (Math/cos lat2)))]
     (* R 2 (Math/asin (Math/sqrt a)))))
 
@@ -48,12 +51,12 @@
   [locs min-interval-millis]
   (loop [[loc next-loc & rest-locs] locs ret []]
     (if next-loc
-      (let [time (:timestamp loc)
-            next-time (:timestamp next-loc)
-            accuracy (get-in loc [:location :accuracy])
-            next-accuracy (get-in next-loc [:location :accuracy])]
+      (let [time (timestamp loc)
+            next-time (timestamp next-loc)
+            cur-accuracy (accuracy loc)
+            next-accuracy (accuracy next-loc)]
         (if (< (t/in-millis (t/interval time next-time)) min-interval-millis)
-          (if (< accuracy next-accuracy)
+          (if (< cur-accuracy next-accuracy)
             (recur rest-locs (conj ret loc))
             (recur (concat [next-loc] rest-locs) ret)
             )
@@ -64,52 +67,35 @@
       )
     ))
 
+
 (defn kalman-filter
   "Apply kalman filter to the given location samples
   with minimun speed and minimun interval.
   See: http://stackoverflow.com/a/15657798"
-  [locs min-speed min-interval-millis]
+  [locs speed min-interval-millis]
 
   (let [
         ; downsample the location samples if two samples are too close in time
         locs  (filter-too-frequent-samples locs min-interval-millis)
         ; initialize the filter
-        f (first locs)
-        lat (get-in f [:location :latitude])
-        lng (get-in f [:location :longitude])
-        accuracy (get-in f [:location :accuracy])
-        var (* accuracy accuracy)
-        time (:timestamp f)
-        init-ret [(-> f
-                      (assoc-in [:location :filtered-latitude] lat)
-                      (assoc-in [:location :filtered-longitude] lng)
-                      )]
+        head (first locs)
+        head-accuracy (accuracy head)
         ]
-    (loop [[cur & locs] (rest locs) lat lat lng lng var var time time ret init-ret]
+    (loop [[cur & locs] (rest locs) lat (latitude head) lng (longitude head)
+           var (* head-accuracy head-accuracy) time (timestamp head) ret [head]]
       (if cur
-        (let [cur-lat (get-in cur [:location :latitude])
-              cur-lng (get-in cur [:location :longitude])
-              accuracy (get-in cur [:location :accuracy])
-              speed (get-in cur [:location :speed])
-              speed (max speed min-speed)
-              cur-time  (:timestamp cur)]
+        (let [cur-lat (latitude cur)
+              cur-lng (longitude cur)
+              cur-accuracy (accuracy cur)
+              cur-time  (timestamp cur)]
           (let [time-diff (/ (t/in-millis (t/interval time cur-time)) 1000.0)
                 var (+ var (* time-diff speed speed))
-                k (/ var (+ var (* accuracy accuracy)))
+                k (/ var (+ var (* cur-accuracy cur-accuracy)))
                 new-lat (+ lat (* k (- cur-lat lat)))
                 new-lng (+ lng (* k (- cur-lng lng)))
-                var (* (- 1 k) var)
-                filtered-distance (haversine {:latitude lat :longitude lng}
-                                             {:latitude new-lat :longitude new-lng})
-                filtered-speed (* 1000
-                                  (/ filtered-distance time-diff))]
-            (recur locs new-lat new-lng  var cur-time
-                   (conj ret (-> cur
-                                 (assoc-in [:location :filtered-latitude] new-lat)
-                                 (assoc-in [:location :filtered-longitude] new-lng)
-                                 (assoc-in [:location :filtered-speed] filtered-speed)
-                                 (assoc-in [:location :filtered-distance] filtered-distance)
-                                 )))
+                var (* (- 1 k) var)]
+            (recur locs new-lat new-lng var cur-time
+                   (conj ret (LocationSample. cur-time new-lat new-lng (Math/sqrt var))))
             )
 
           )
@@ -118,15 +104,23 @@
 
     ))
 
-
+(defn trace-distance [location-trace]
+  (loop [origin (first location-trace) [cur & rest] (rest location-trace) sum 0]
+    (if cur (recur cur rest (+ sum (haversine origin cur)))
+            sum)
+    )
+  )
 (defn median-location
   [locs]
   (if (seq locs)
     (let [middle (/ (count locs) 2)
-          lats (sort (map (comp :latitude :location) locs))
-          lngs (sort (map (comp :longitude :location) locs))]
-      {:latitude (nth lats middle)
-       :longitude (nth lngs middle)}
+          lats (sort (map latitude locs))
+          lngs (sort (map longitude locs))
+          accu (sort (map accuracy locs))]
+      (reify LocationSampleProtocol
+        (latitude [_] (nth lats middle))
+        (longitude[_] (nth lngs middle))
+        (accuracy [_] (nth accu middle)))
       )
     nil)
   )

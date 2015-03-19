@@ -15,6 +15,7 @@
                  [com.taoensso/timbre "3.3.1"]
                  [org.ocpsoft.prettytime/prettytime "3.2.7.Final"]
                  [com.novemberain/monger "2.0.1"]
+                 [clj-http "1.0.1"]
 
 
                  ])

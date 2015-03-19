@@ -1,132 +1,86 @@
 (ns mobility-dpu.summary
-  (:require [clj-time.coerce :as c]
-            [clj-time.core :as t]
-            [mobility-dpu.spatial :as spatial]
-            [taoensso.timbre :as timbre])
-  (:use [aprint.core])
-  (:import (org.joda.time DateTime LocalDate)))
+  (:require
+    [clj-time.core :as t]
+    [mobility-dpu.spatial :as spatial]
+    [taoensso.timbre :as timbre]
+    [mobility-dpu.algorithms :as algorithms]
+
+    [mobility-dpu.temporal :as temporal])
+  (:use [aprint.core]
+        [mobility-dpu.config]
+        [mobility-dpu.protocols])
+ )
+;;;; The following functions are specific for EpisodeProtocol
 
 (timbre/refer-timbre)
 
 
-
-
-
-(defn infer-home
-  "Given a day of segments, return
-  1) time leave/return home,
-  2) time not at home in seconds,
-  and 3) home location"
-  [segs]
-  (let [first-loc (:median-location (first segs)) last-loc (:median-location (last segs))]
-    (if (and  first-loc last-loc)
-      (let [dist-between-first-last (spatial/haversine first-loc last-loc)
-            segs (filter :median-location segs)]
-
-        (if (< dist-between-first-last 0.2)
-          (let [at-home? #(< (spatial/haversine first-loc  (:median-location %)) 0.2)
-                after-leave-home (drop-while at-home? segs)
-                leave-home (:start (first after-leave-home))
-
-                [after-return-home before-return-home] (map reverse (split-with at-home? (reverse after-leave-home)))
-                return-home (:start (first after-return-home))
-                back-home-seconds (apply + 0 (map :duration-in-seconds (filter at-home? before-return-home)))
-                ]
-            {:home first-loc
-             :leave_home_time leave-home
-             :return_home_time return-home
-             :time_not_at_home_in_seconds (if leave-home (- (t/in-seconds (t/interval leave-home return-home)) back-home-seconds)
-                                                         0)
-             })
-          (do (info (str "Distance between the first-last is too high:" dist-between-first-last))
-              {}
-              )
-          )
-        )
-      )
-    )
-
+(defn- duration [%]
+  (t/interval (:start %) (:end %))
   )
 
-(defn geodiameter-in-km [segs]
-  (let [segs (filter :median-location segs)]
-    (apply max 0 (for [l1 (map :median-location segs)
-                     l2 (map :median-location segs)]
-                 (spatial/haversine l1 l2)
-                  )))
+(defn- place [episode]
+  {:pre [(= (state episode) :still)]}
+  (spatial/median-location (location-trace episode))
   )
-
-
-(defn active-time-in-seconds [segs]
-  (apply + (->> segs
-                (filter #(= :on_foot (:inferred-activity %)))
-                (map :duration-in-seconds)
+(defn- active-time-in-seconds [on-foot-episodes]
+  (apply + (->> on-foot-episodes
+                (map (comp t/in-seconds duration))
                 ))
   )
 
-(defn walking-distance-in-km
-  "Return the total (kallman-filtered) walking distance in the given segments,
-  but remove the potential spurious samples of which the speed is over 4 m/s"
-  [segs]
-  (let [segs (filter #(= :on_foot (:inferred-activity %)) segs)
-        segs (filter #(> (count (:locations %)) 1) segs)
-        locs (mapcat #(spatial/kalman-filter (:locations %) 2 30000) segs)
-        locs (filter #(and (:filtered-speed (:location %)) (< (:filtered-speed (:location %)) 4) ) locs)
+(defn- walking-distance-in-km
+  "Return the total (kallman-filtered) walking distance in the given segments"
+  [on-foot-episodes]
+  (let [segs (filter #(> (count (location-trace %)) 1) on-foot-episodes)
+        filtered-traces (map #(spatial/kalman-filter (location-trace %) (:filter-walking-speed config) 30000) segs)]
+    (apply + 0 (map spatial/trace-distance filtered-traces))
+    )
+  )
+(defn- infer-home [still-episodes]
+  (let [epis (filter :location
+                     (for [epi still-episodes]
+                       {:start (start epi)
+                        :end (end epi)
+                        :location (place epi)}
+                       ))]
+    (if-let [epis (seq epis)]
+      (algorithms/infer-home epis nil)
+      )
+    )
+
+
+  )
+(defn- geodiameter [still-episodes]
+  (algorithms/geodiameter-in-km (filter identity (map place still-episodes)))
+  )
+(defn- gait-speed [on-foot-episodes]
+  (algorithms/x-quantile-n-meter-gait-speed
+    (filter seq (map location-trace on-foot-episodes))
+    (:quantile-of-gait-speed config)
+    (:n-meters-of-gait-speed config))
+  )
+
+
+
+(defn summarize [user device date zone daily-episodes]
+  (let [state-groups (group-by state daily-episodes)
+        on-foot-episdoes (:on_foot state-groups)
+        still-episodes (:still state-groups)
         ]
-    (apply + 0 (map (comp :filtered-distance :location) locs))
+    (mobility-dpu.datapoint/summary-datapoint
+      {:user user
+       :device  device
+       :date  date
+       :creation-datetime (temporal/to-last-millis-of-day date zone)
+       :geodiameter-in-km      (geodiameter still-episodes)
+       :walking-distance-in-km (walking-distance-in-km on-foot-episdoes)
+       :active-time-in-seconds (active-time-in-seconds on-foot-episdoes)
+       :steps nil
+       :gait-speed-in-meter-per-second   (gait-speed on-foot-episdoes)
+       :leave-return-home (infer-home still-episodes)
+       :coverage       (algorithms/coverage date zone daily-episodes)
+       }
+      )
     )
-  )
-
-
-(defn max-gait-speed
-  "Return the 90% quatile walking speed without considering the spurious samples of which the speed is over 4 m/s"
-  [segs]
-  (let [segs (filter #(= :on_foot (:inferred-activity %)) segs)
-        segs (filter #(> (count (:locations %)) 1) segs)
-        locs (mapcat #(spatial/kalman-filter (:locations %) 2 30000) segs)
-        speeds (map (comp :filtered-speed :location) locs)
-        speeds (filter identity speeds)
-        speeds (filter #(< % 4) speeds)
-        ]
-    (if (seq speeds)
-      (nth (sort speeds) (int (* 0.9 (count speeds))))
-      0)
-    )
-  )
-
-(defn coverage
-  "Return the coverage of the mobility data"
-  [date segs]
-   (let [zone (.getZone ^DateTime (:start (first segs)))
-         start-of-date (.toDateTimeAtStartOfDay ^LocalDate date zone)
-         end-of-date (.toDateTimeAtStartOfDay ^LocalDate  (t/plus date (t/days 1)) zone)
-         seconds (apply + (map (fn [{:keys [start end]}]
-                                 (t/in-seconds (t/interval start end))
-                                 )
-                               segs
-                               ))
-         ]
-     (/ seconds (t/in-seconds (t/interval start-of-date end-of-date)))
-     )
-  )
-
-
-(defn summarize [date daily-segments]
-  (merge
-    {
-     :geodiameter_in_km (geodiameter-in-km daily-segments)
-     :walking_distance_in_km (walking-distance-in-km daily-segments)
-     :active_time_in_seconds (active-time-in-seconds daily-segments)
-     :max_gait_speed_in_meter_per_second (max-gait-speed daily-segments)
-     :coverage (coverage date daily-segments)
-     }
-    (infer-home daily-segments)
-    )
-  )
-
-
-
-(defn debug-mesg [segs]
-  :debug (map #(vector (:start %) (:end %) (:inferred-activity %) (spatial/haversine (:median-location (first segs))
-                                                                                     (:median-location %))) segs)
   )
