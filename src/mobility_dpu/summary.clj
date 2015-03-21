@@ -5,7 +5,8 @@
     [taoensso.timbre :as timbre]
     [mobility-dpu.algorithms :as algorithms]
 
-    [mobility-dpu.temporal :as temporal])
+    [mobility-dpu.temporal :as temporal]
+    [mobility-dpu.datapoint :as datapoint])
   (:use [aprint.core]
         [mobility-dpu.config]
         [mobility-dpu.protocols])
@@ -68,7 +69,7 @@
         on-foot-episdoes (:on_foot state-groups)
         still-episodes (:still state-groups)
         ]
-    (mobility-dpu.datapoint/summary-datapoint
+    (datapoint/summary-datapoint
       {:user user
        :device  device
        :date  date

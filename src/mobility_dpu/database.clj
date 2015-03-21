@@ -22,7 +22,7 @@
                                                  "header.schema_id.namespace" ns
                                                  :user_id user})
                                        (mq/keywordize-fields true)
-                                       (mq/sort {"header.creation_date_time_epoch_milli" -1})
+                                       (mq/sort {"header.creation_date_time_epoch_milli" 1})
                                        )]
           (reify
             DatapointProtocol

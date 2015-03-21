@@ -114,13 +114,15 @@
   [locs]
   (if (seq locs)
     (let [middle (/ (count locs) 2)
+          times (sort (map timestamp locs))
           lats (sort (map latitude locs))
           lngs (sort (map longitude locs))
           accu (sort (map accuracy locs))]
-      (reify LocationSampleProtocol
-        (latitude [_] (nth lats middle))
-        (longitude[_] (nth lngs middle))
-        (accuracy [_] (nth accu middle)))
+      (->LocationSample (nth times middle)
+                        (nth lats middle)
+                        (nth lngs middle)
+                        (nth accu middle)
+                        )
       )
     nil)
   )

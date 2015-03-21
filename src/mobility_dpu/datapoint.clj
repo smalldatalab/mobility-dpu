@@ -1,6 +1,6 @@
 (ns mobility-dpu.datapoint
   (:require [clj-time.coerce :as c])
-  (:import (org.joda.time ReadableInstant ReadablePartial)
+  (:import (org.joda.time ReadableInstant ReadablePartial DateTimeZone)
            (clojure.lang IPersistentMap IPersistentCollection Keyword))
   (:use [mobility-dpu.config]))
 
@@ -14,6 +14,7 @@
   (map time->str m))
 (defmethod time->str ReadableInstant [m] (str m))
 (defmethod time->str ReadablePartial [m] (str m))
+(defmethod time->str DateTimeZone [m] (str m))
 (defmethod time->str :default [m] m)
 
 
@@ -32,7 +33,7 @@
                 "creation_date_time_epoch_milli" (c/to-long creation-datetime)
                 "acquisition_provenance" { "source_name" (str "Mobility-DPU-v1.0-" device),
                                           "modality" "SENSED" } },
-       "body" (assoc body :device device  :date date)
+       :body (assoc body :device device  :date date)
        })
     )
   )

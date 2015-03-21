@@ -44,7 +44,7 @@
   UserDataSourceProtocol
   (source-name [_] "iOS")
   (activity-samples [_]
-    (for [datapoint (filter :activities (query db "cornell" "mobility-stream-iOS" user))]
+    (for [datapoint (filter (comp :activities body) (query db "cornell" "mobility-stream-iOS" user))]
 
       (let [{:keys [activity confidence]} (first (:activities (body datapoint)))]
         (iOSActivitySample. (timestamp datapoint)
@@ -55,7 +55,7 @@
       )
     )
   (location-samples [_]
-    (for [datapoint (filter :location (query db "cornell" "mobility-stream-iOS" user))]
+    (for [datapoint (filter (comp :location body) (query db "cornell" "mobility-stream-iOS" user))]
 
       (let [{:keys [accuracy horizontal_accuracy latitude longitude]} (:location (body datapoint)) ]
         (LocationSample. (timestamp datapoint)

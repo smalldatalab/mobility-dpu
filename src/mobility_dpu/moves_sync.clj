@@ -24,7 +24,7 @@
 
 ;;; The following two functions query Moves data from the shim server
 
-(defn- get-profile [user]
+(defn get-profile [user]
   (let [profile (get-in (client/get profile-endpoint {:query-params {"username" user}
                                                       :as :json
                                                       :throw-exceptions false})
@@ -106,7 +106,9 @@
                          :location (to-location-sample (:location place))}
                         ) place-segments)
         ]
-    (algorithms/infer-home episodes possible-home-location)))
+    (if-let [episodes (seq episodes)]
+      (algorithms/infer-home episodes possible-home-location)
+      )))
 
 (defn- gait-speed [activities]
   (let [traces (map :trackPoints activities)
@@ -125,7 +127,7 @@
   )
 
 (defn- coverage [date zone segments]
-  (let [episodes (map (fn [{:keys [startTime endTime]}]
+  (let [episodes (map (fn [{:keys [startTime endTime] :as segment}]
                         {:start (DateTime/parse startTime date-time-format)
                          :end (DateTime/parse endTime date-time-format)}
                         ) segments)
@@ -135,8 +137,9 @@
   )
 
 
-(defn- summarize [user date zone daily-segments]
-  (let [activities (filter on-foot? (mapcat :activities daily-segments))]
+(defn- summarize [user date zone storyline]
+  (let [daily-segments (:segments storyline)
+        activities (filter on-foot? (mapcat :activities daily-segments))]
     (datapoint/summary-datapoint
       (merge (base user date zone)
              {:geodiameter-in-km      (geodiameter daily-segments)
@@ -148,26 +151,31 @@
               :coverage (coverage date zone daily-segments)
               })
       )
-    )
-  )
+    ))
 
-(defn segments [user date zone storyline]
+(defn segments-datapoint [user date zone storyline]
   (mobility-dpu.datapoint/segments-datapoint
     (assoc (base user date zone)
       :body storyline))
   )
 
-(defn get-datapoints [user]
-  (apply concat
-         (for [{:keys [date zone] :as storyline} (daily-storyline-sequence user)]
-           (let [date (LocalDate/parse date date-format)
-                 zone zone]
-             [(segments user date zone storyline)
-              (summarize user date zone storyline)
-              ]
-             )
-           ))
-  )
+
+
+(defn get-datapoints
+  ([user] (get-datapoints user (daily-storyline-sequence user)))
+  ([user [{:keys [date zone segments] :as storyline} & rest]]
+      (if storyline
+        (if (seq segments)
+          (let [date (LocalDate/parse date date-format)              ]
+            (concat
+              [(segments-datapoint user date zone storyline)
+               (summarize user date zone storyline)]
+              (lazy-seq (get-datapoints user rest))
+              )
+            )
+          (lazy-seq (get-datapoints user rest))
+          )
+        )))
 
 
 

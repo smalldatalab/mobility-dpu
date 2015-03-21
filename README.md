@@ -15,7 +15,7 @@
 
 ## Usage
 
-* The DPU generates and saves new data points every 10 minutes
+* Once start running, the DPU will generate and save new data points every 10 minutes for every user and replace the old data.
 
 ```bash
     $ java -jar mobility-dpu-0.1.0-standalone.jar
