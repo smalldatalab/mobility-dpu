@@ -35,6 +35,6 @@
        (save [_ data]
           (mc/save db coll data)
        )
-      (users [_] (mc/distinct db coll "user_id" {}))
+      (users [_] (mc/distinct db "endUser" "_id" {}))
       ))
   )

@@ -36,14 +36,16 @@
   UserDataSourceProtocol
   (source-name [_] "Android")
   (activity-samples [_]
-    (for [datapoint (query db "omh" "mobility" user)]
+    (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
+                            (query db "omh" "mobility" user)) ; old Mobility data
+          ]
         (AndroidActivitySample. (timestamp datapoint)
                                 (datapoint->activity-prob-map datapoint))
-
       )
   )
   (location-samples [_]
-    (for [datapoint (query db "omh" "location" user)]
+    (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-location-stream" user)
+                            (query db "omh" "location" user))]
       (LocationSample. (timestamp datapoint)
                       (:latitude (body datapoint))
                       (:longitude (body datapoint))
