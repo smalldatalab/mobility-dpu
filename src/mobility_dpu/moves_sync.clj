@@ -3,13 +3,19 @@
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [mobility-dpu.datapoint :as datapoint]
-            [mobility-dpu.algorithms :as algorithms])
+            [mobility-dpu.algorithms :as algorithms]
+            [mobility-dpu.throttle :as throttle])
   (:use [mobility-dpu.protocols]
         [mobility-dpu.config]
         [aprint.core])
   (:import (org.joda.time LocalDate DateTimeZone DateTime)
            (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
-
+(def request-throttle (let [t1 (throttle/create-throttle! (t/hours 1) 1400)
+                            t2 (throttle/create-throttle! (t/minutes 1) 50)]
+                        (fn [f]
+                          (t1 #(t2 f))
+                          )
+                        ))
 (def moves-shim (:moves-shim-endpoint config))
 (def profile-endpoint (str moves-shim "profile"))
 (def storyline-endpoint (str moves-shim "storyline"))
@@ -25,9 +31,9 @@
 ;;; The following two functions query Moves data from the shim server
 
 (defn get-profile [user]
-  (let [profile (get-in (client/get profile-endpoint {:query-params {"username" user}
-                                                      :as :json
-                                                      :throw-exceptions false})
+  (let [profile (get-in (request-throttle #(client/get profile-endpoint {:query-params {"username" user}
+                                                                        :as :json
+                                                                        :throw-exceptions false}))
                         [:body :body :profile])]
     (if profile
       {:first-date (LocalDate/parse (:firstDate profile) date-format)
@@ -47,12 +53,12 @@
   ([user start til zone]
     (let [end (t/plus start (t/days 6))
           end (if (t/after? end til) til end)
-          response (client/get storyline-endpoint {:query-params {"username" user
-                                                                  "dateStart" start
-                                                                  "dateEnd" end}
-                                                   :as :json
-                                                   :throw-exceptions false
-                                                   })
+          response (request-throttle #(client/get storyline-endpoint {:query-params {"username" user
+                                                                                    "dateStart" start
+                                                                                    "dateEnd" end}
+                                                                     :as :json
+                                                                     :throw-exceptions false
+                                                                     }))
           storylines (get-in response [:body :body])
           storylines (map #(assoc % :zone zone) storylines)
           ]

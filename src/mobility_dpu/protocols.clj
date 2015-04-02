@@ -4,18 +4,18 @@
 
 (defprotocol TimestampedProtocol
   (timestamp [this]))
-
 (defprotocol DatapointProtocol
   (body [this])
   )
 (defprotocol ActivitySampleProtocol
-  (prob-sample-given-state [this state])
+  (prob-sample-given-state [this s]
+  "return P(Hidden State=s | this sample),  namely, given the observation in this sample, what is the probability of hidden state being s")
   )
 
 (defprotocol LocationSampleProtocol
   (latitude [this])
   (longitude [this])
-  (accuracy [this])
+  (accuracy [this] "accuracy of the location sample in meters")
   )
 
 (defrecord LocationSample [timestamp latitude longitude accuracy]
@@ -24,16 +24,17 @@
   (longitude [_] longitude)
   (accuracy [_] accuracy)
   TimestampedProtocol
-  (timestamp [_] timestamp)
+  (timestamp [_] "The time when the location smaple is colleted" timestamp)
   )
 
 (defprotocol EpisodeProtocol
-  (state [this])
-  (start [this])
-  (end [this])
-  (activity-trace [this])
-  (location-trace [this])
-  (trim [this new-start new-end])
+  "An episode represents a period of time in which the user is in a certain mobility state"
+  (state [this] "The mobility state of this episode")
+  (start [this] "start time")
+  (end [this] "end time")
+  (activity-trace [this] "activity datapoints")
+  (location-trace [this] "location datapoints")
+  (trim [this new-start new-end] "trim the period of the episode to the new timeframe")
   )
 (defrecord Episode [inferred-state start end activity-samples location-samples]
   EpisodeProtocol
@@ -41,6 +42,7 @@
   (start [_] start)
   (end [_] end)
   (trim [this new-start new-end]
+    "Trim the episode and keep the traces that are within the new timeframe"
     (let [interval (t/interval new-start new-end)
           within #(or (t/within? interval (timestamp %)) (= new-end (timestamp %)))]
       (Episode. (state this) new-start new-end

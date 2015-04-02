@@ -1,7 +1,8 @@
 (ns mobility-dpu.android
   (:require [mobility-dpu.temporal :refer [dt-parser]])
   (:use [mobility-dpu.protocols])
-  (:import (mobility_dpu.protocols LocationSample)))
+  (:import (mobility_dpu.protocols LocationSample)
+           (org.joda.time DateTime)))
 (defn normalize-activity-name [activity-name]
   (let [act (keyword (clojure.string/lower-case activity-name))]
     (if (= act :walking)
@@ -17,7 +18,8 @@
 (defrecord AndroidActivitySample [timestamp activity-prob-map]
   ActivitySampleProtocol
   (prob-sample-given-state [_ state]
-    "Each hidden state E's prob = prob of E given in the observation + a portion of prob of Tilting & Unknown prob
+    "P(Hidden state = E | The observation)
+          = The probability of state E reported by the Android + a portion of prob of Tilting & Unknown prob
       Still state will get larger portion from Unknown prob, but smaller portion from Tilting prob"
     (let [tilting (/ (or (:tilting activity-prob-map) 0) 7.0)
           unknown (/ (or (:unknown activity-prob-map) 0) 5.0)]
@@ -46,7 +48,9 @@
   (location-samples [_]
     (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-location-stream" user)
                             (query db "omh" "location" user))]
-      (LocationSample. (timestamp datapoint)
+      (LocationSample. (if-let [more-accurate-time (:timestamp (body datapoint))]
+                          (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
+                          (timestamp datapoint))
                       (:latitude (body datapoint))
                       (:longitude (body datapoint))
                       (:accuracy (body datapoint)))
