@@ -50,8 +50,7 @@
                                  leave-return-home
                                  coverage
                                  ]}]
-  {:pre [
-         ; these params are not allowed to be nil
+  {:pre [; these params are not allowed to be nil
          (and user device date
               creation-datetime
               geodiameter-in-km

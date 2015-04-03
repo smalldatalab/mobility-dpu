@@ -63,7 +63,13 @@
   )
 
 
-
+(defn segments [user device date zone daily-episodes]
+  (datapoint/segments-datapoint {:user user
+                                 :device device
+                                 :date date
+                                 :creation-datetime (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
+                                 :body {:episodes daily-episodes}})
+  )
 (defn summarize [user device date zone daily-episodes]
   (let [state-groups (group-by state daily-episodes)
         on-foot-episdoes (:on_foot state-groups)
@@ -73,7 +79,7 @@
       {:user user
        :device  device
        :date  date
-       :creation-datetime (temporal/to-last-millis-of-day date zone)
+       :creation-datetime (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
        :geodiameter-in-km      (geodiameter still-episodes)
        :walking-distance-in-km (walking-distance-in-km on-foot-episdoes)
        :active-time-in-seconds (active-time-in-seconds on-foot-episdoes)

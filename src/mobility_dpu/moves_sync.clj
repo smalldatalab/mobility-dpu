@@ -21,11 +21,13 @@
 (def storyline-endpoint (str moves-shim "storyline"))
 (def date-time-format (.withOffsetParsed ^DateTimeFormatter (ISODateTimeFormat/basicDateTimeNoMillis)))
 (def date-format (ISODateTimeFormat/basicDate))
-(defn- base [user date zone]
+(defn- base [user date zone storyline]
   {:user user
    :device  "Moves-App"
    :date  date
-   :creation-datetime (mobility-dpu.temporal/to-last-millis-of-day date zone)}
+   :creation-datetime (if (:endTime (last storyline))
+                        (DateTime/parse (:endTime (last (:segments storyline))) date-time-format)
+                        (mobility-dpu.temporal/to-last-millis-of-day date zone))}
   )
 
 ;;; The following two functions query Moves data from the shim server
@@ -147,7 +149,7 @@
   (let [daily-segments (:segments storyline)
         activities (filter on-foot? (mapcat :activities daily-segments))]
     (datapoint/summary-datapoint
-      (merge (base user date zone)
+      (merge (base user date zone storyline)
              {:geodiameter-in-km      (geodiameter daily-segments)
               :walking-distance-in-km (active-distance activities)
               :active-time-in-seconds (active-duration activities)
@@ -161,7 +163,7 @@
 
 (defn segments-datapoint [user date zone storyline]
   (mobility-dpu.datapoint/segments-datapoint
-    (assoc (base user date zone)
+    (assoc (base user date zone storyline)
       :body storyline))
   )
 

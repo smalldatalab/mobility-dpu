@@ -8,7 +8,8 @@
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [mobility-dpu.temporal :as temporal]
-            [mobility-dpu.summary :as summary])
+            [mobility-dpu.summary :as summary]
+            [mobility-dpu.datapoint :as datapoint])
   (:use [aprint.core]
         [mobility-dpu.protocols])
   (:import
@@ -222,7 +223,9 @@
         daily-episode-groups (group-by-day (extract-episodes data-source))]
     (apply concat
      (for [{:keys [date zone episodes] } daily-episode-groups]
-       [(summary/summarize user source date zone episodes)]
+       [(summary/summarize user source date zone episodes)
+        (summary/segments user source date zone episodes)
+        ]
        ))
     )
   )
