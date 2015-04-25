@@ -16,13 +16,17 @@
 
 
 (timbre/refer-timbre)
+(timbre/set-config! [:appenders :spit :enabled?] true)
 (def db (mongodb "omh" "dataPoint"))
 
 (defn -main
   "The application's main function"
   [& args]
   (loop []
-    (doseq [user (users db)
+    (doseq [
+            ; run dpu for specifc users or all the users in the db
+            user (or (seq args) (users db))
+            ; different sources: Android, iOS, and Moves App
             source-fn [#(mobility/get-datapoints % (->AndroidUserDatasource % db))
                        #(mobility/get-datapoints % (->iOSUserDatasource % db))
                        #(moves/get-datapoints %)]]
