@@ -16,12 +16,15 @@
                           (t1 #(t2 f))
                           )
                         ))
-(def moves-shim (:moves-shim-endpoint config))
+(def authorizations-endpoint (str (:shim-endpoint config) "/authorizations"))
+(def moves-shim (str (:shim-endpoint config) "/data/moves/"))
 (def profile-endpoint (str moves-shim "profile"))
 (def storyline-endpoint (str moves-shim "storyline"))
+
+
 (def date-time-format (.withOffsetParsed ^DateTimeFormatter (ISODateTimeFormat/basicDateTimeNoMillis)))
 (def date-format (ISODateTimeFormat/basicDate))
-(defn- base [user date zone storyline]
+(defn- base-datapoint [user date zone storyline]
   {:user user
    :device  "Moves-App"
    :date  date
@@ -30,9 +33,21 @@
                         (mobility-dpu.temporal/to-last-millis-of-day date zone))}
   )
 
+(defn- get-auths
+  "return the authorizations the user has"
+  [user]
+  (let [body (get-in (request-throttle #(client/get authorizations-endpoint {:query-params {"username" user}
+                                                                         :as :json
+                                                                         :throw-exceptions false}))
+                        [:body])]
+    (mapcat :auths body)
+    )
+  )
 ;;; The following two functions query Moves data from the shim server
 
-(defn get-profile [user]
+(defn get-profile
+  "get the user's Moves profile"
+  [user]
   (let [profile (get-in (request-throttle #(client/get profile-endpoint {:query-params {"username" user}
                                                                         :as :json
                                                                         :throw-exceptions false}))
@@ -44,6 +59,7 @@
   )
 
 (defn- daily-storyline-sequence
+  "Query the storylines from the moves until the current date in the user's timezone"
   ([user] (let [{:keys [first-date current-zone] :as response} (get-profile user)]
             (if response
               (daily-storyline-sequence
@@ -149,7 +165,7 @@
   (let [daily-segments (:segments storyline)
         activities (filter on-foot? (mapcat :activities daily-segments))]
     (datapoint/summary-datapoint
-      (merge (base user date zone storyline)
+      (merge (base-datapoint user date zone storyline)
              {:geodiameter-in-km      (geodiameter daily-segments)
               :walking-distance-in-km (active-distance activities)
               :active-time-in-seconds (active-duration activities)
@@ -163,14 +179,15 @@
 
 (defn segments-datapoint [user date zone storyline]
   (mobility-dpu.datapoint/segments-datapoint
-    (assoc (base user date zone storyline)
+    (assoc (base-datapoint user date zone storyline)
       :body storyline))
   )
 
 
 
 (defn get-datapoints
-  ([user] (get-datapoints user (daily-storyline-sequence user)))
+  ([user] (if (some #(= % "moves") (get-auths user))
+            (get-datapoints user (daily-storyline-sequence user))))
   ([user [{:keys [date zone segments] :as storyline} & rest]]
       (if storyline
         (if (seq segments)
