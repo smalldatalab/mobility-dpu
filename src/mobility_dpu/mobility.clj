@@ -151,7 +151,13 @@
         segments (segment-by-gaps act-seq)
         segments (filter #(> (count %) 1) segments)
 
-        ; further break a segment into partitions, each of which represent a continuos activity episode
+        ; further break each segment into partitions, each of which represent a continuos activity episode
+
+        ; each partition is a map as follows
+        ; {:start START TIME OF PARTITION
+        ;  :end END TIME
+        ;  :state  THE INFFERED STATE
+        ;  :activity-samples THE RAW SAMPLES}
         partitions (mapcat (fn [segment] (hmm-partition segment
                                                         init-transition-matrix
                                                         init-state-prob))
@@ -159,7 +165,7 @@
         partitions (filter #(not= (:start %) (:end %)) partitions)
         partitions (cond-> partitions
                            (seq partitions) (extend-and-merge-still-partitions  (* 1.5 60 60)))
-        ; merge activity segments with location datapoints by time
+        ; merge activity segments with location datapoints by the time range of each segment
         partitions (merge-partitions-with-locations partitions loc-seq)
        ]
     ; generate episodes
@@ -182,7 +188,7 @@
 
 
 (defn group-by-day
-  "Group epidsode by days. A segment can belong to mutiple groups if it covers a time range across more than one days"
+  "Group epidsode segment by days. A segment can belong to mutiple groups if it span across multiple days"
   ([episodes] (let [episodes (sort-by start episodes)]
                 (if (seq episodes)
                   (group-by-day [] (start (first episodes)) episodes))))

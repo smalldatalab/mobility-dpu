@@ -73,6 +73,10 @@
   with minimun speed and minimun interval.
   See: http://stackoverflow.com/a/15657798"
   [locs speed min-interval-millis]
+  {:pre [(every? #(satisfies? LocationSampleProtocol %) locs)]
+   :post [(every? #(satisfies? LocationSampleProtocol %) %)]}
+
+
 
   (let [
         ; downsample the location samples if two samples are too close in time

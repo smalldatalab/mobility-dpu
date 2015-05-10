@@ -14,25 +14,26 @@
 
   )
 
-
+; config logger
 (timbre/refer-timbre)
 (timbre/set-config! [:appenders :spit :enabled?] true)
+
 (def db (mongodb "omh" "dataPoint"))
 
 (defn -main
   "The application's main function"
   [& args]
   (loop []
-    (doseq [
-            ; run dpu for specifc users or all the users in the db
+    (doseq [; run dpu for specifc users (if args are set) or all the users in the db
             user (or (seq args) (users db))
-            ; different sources: Android, iOS, and Moves App
+            ; functions to generate datapoints from different sources: Android, iOS, and Moves App
             source-fn [#(mobility/get-datapoints % (->AndroidUserDatasource % db))
                        #(mobility/get-datapoints % (->iOSUserDatasource % db))
                        #(moves/get-datapoints %)]]
-
       (try (doseq [datapoint (source-fn user)]
-             (info "Save data for " user " " (get-in datapoint [:body :date]) " " (get-in datapoint [:body :device]))
+             (info "Save data for " user " "
+                   (get-in datapoint [:body :date]) " "
+                   (get-in datapoint [:body :device]))
              (save db datapoint))
            (catch Exception e (error e)))
       )

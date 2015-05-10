@@ -126,7 +126,7 @@
   )
 
 (defn x-quantile-n-meter-gait-speed
-  "Return the x quantile walking n-meter speed after filtered by a kalman filter.
+  "Return the x quantile n-meter walking speed after filtered by a kalman filter.
   Spurious samples of which the speed is over 4 m/s are removed"
   [location-traces x-quantile n-meters]
   (:pre [(>= x-quantile 0)

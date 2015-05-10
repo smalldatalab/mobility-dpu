@@ -9,7 +9,7 @@
   )
 (defprotocol ActivitySampleProtocol
   (prob-sample-given-state [this s]
-  "return P(Hidden State=s | this sample),  namely, given the observation in this sample, what is the probability of hidden state being s")
+  "return P(Hidden State=s | this sample),  namely, given observing this sample, what is the probability of hidden state being s")
   )
 
 (defprotocol LocationSampleProtocol
@@ -52,12 +52,12 @@
       )
     )
   (location-trace [_] location-samples)
-  (activity-trace [_] location-samples)
+  (activity-trace [_] activity-samples)
   )
 
 (defprotocol DatabaseProtocol
   (query [this schema-namespace schema-name user]
-         "Return the name of the source this segmentor is designed for")
+         "query data point of specific schema and user")
   (save [this data]
          "Save the data point. Replace the existing data point with the same id.")
   (users [this]
@@ -69,6 +69,7 @@
   (source-name [this] "Return the name of the data source")
   (activity-samples [this] "Return a list of all the raw activity samples")
   (location-samples [this] "Return a list of all the raw location samples")
+  ; (steps-samples [this] "Return a list of all the step count samples")
   )
 
 
