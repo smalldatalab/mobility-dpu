@@ -41,53 +41,46 @@
   UserDataSourceProtocol
   (source-name [_] "iOS")
   (activity-samples [this]
-    ; Use both activity samples and moving speed derived from location samples to infer mobility status.
-    (concat
-      (for [datapoint (filter (comp :activities body) (query db "cornell" "mobility-stream-iOS" user))]
+    (let [dp->sample
+          (fn [dp] "convert a raw data point dp to activity sample record"
+            (let [{:keys [activity confidence]} (first (:activities (body dp)))]
+              (iOSActivitySample.
+                (timestamp dp)
+                (activity-mapping (keyword activity))
+                (prob-mapping (keyword confidence)))))
+          ; convert all data points
+          samples(->> (query db "cornell" "mobility-stream-iOS" user)
+                       (filter (comp :activities body))
+                       (map dp->sample)
+                       (sort-by timestamp))]
 
-        (let [{:keys [activity confidence]} (first (:activities (body datapoint)))]
-          (iOSActivitySample. (timestamp datapoint)
-                              ((keyword activity) activity-mapping)
-                              ((keyword confidence) prob-mapping)
-
-                              )
-          )
-        )
-      (let [loc-samples (sort-by timestamp (location-samples this))
-            loc-samples (filter #(< (accuracy %) 80) loc-samples)
-            millis-diff (fn [[l1 l2]] (t/in-millis (t/interval (timestamp l1) (timestamp l2))))
-            paired-loc-samples (partition 2 1 loc-samples)
-            paired-loc-samples (filter (fn [pair] (< 30000 (millis-diff pair) 180000)) paired-loc-samples)]
-        (for [[l1 l2 :as pair] paired-loc-samples]
-          (let [speed (* 1000 1000
-                         (/ (spatial/haversine l1 l2)
-                            (millis-diff pair))) ]
-            (iOSActivitySample. (timestamp l2)
-                                (cond
-                                  (> speed 4) :in_vehicle
-                                  (> speed 1.5) :on_foot
-                                  :default :still
-                                  )
-                                 0.4
-                                )
+      ; FIXME there should be a more computation efficient way to address this issue ....
+      ; Fill in "STILL gaps"
+      ; iOS would only return an activity sample every 2 hours if the user is being still for a long time.
+      ; Therefore. one need to fill in the gap between two "STILL" samples here if the gap is no more than 2-hour long.
+      (flatten
+        (for [[cur next] (partition 2 1 samples)]
+          (if (and (= (:sensed-act cur) (:sensed-act next) :still)
+                   (< (t/in-hours (t/interval (timestamp cur) (timestamp next))) 2))
+            ; iteratively fill the gap by replicating the current sample with +6minutes offset util the gap is filled
+            (let [timeseries (iterate #(assoc % :timestamp (t/plus (timestamp %) (t/minutes 6))) cur)
+                  filler (take-while #(t/before? (timestamp %) (timestamp next)) timeseries)]
+              (cons cur filler))
+            [cur]
             )
+          ))
 
-
-          )
-
-        )
       )
-
     )
   (location-samples [_]
+
     (for [datapoint (filter (comp :location body) (query db "cornell" "mobility-stream-iOS" user))]
 
       (let [{:keys [accuracy horizontal_accuracy latitude longitude]} (:location (body datapoint)) ]
         (LocationSample. (timestamp datapoint)
                             latitude
                             longitude
-                            (or accuracy horizontal_accuracy)
-                            )
+                            (or accuracy horizontal_accuracy))
         )
       )
     )
