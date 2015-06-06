@@ -116,23 +116,24 @@
     )
   )
 
-(defn- merge-partitions-with-locations
+(defn- merge-partitions-with-samples
   "Merge the activity segments with the location samples based on timestamps"
-  [partitions loc-seq]
+  [partitions samples key]
   (loop [[head & rest] partitions
-         locations loc-seq
+         samples samples
          ret []]
     (if head
       (let [{:keys [start end]} head
             start (t/minus start (t/seconds 1))
-            locations (drop-while #(t/before? (timestamp %) start) locations)
-            [within over] (split-with #(t/within? start end (timestamp %))  locations)
-            head (assoc head :location-samples within)]
+            samples (drop-while #(t/before? (timestamp %) start) samples)
+            [within over] (split-with #(t/within? start end (timestamp %))  samples)
+            head (assoc head key within)]
         (recur rest over (conj ret head))
         )
       ret)
     )
 )
+
 
 
 
@@ -143,11 +144,12 @@
 
   (let [act-seq (sort-by timestamp (activity-samples datasource))
         loc-seq (sort-by timestamp (location-samples datasource))
+        step-seq (sort-by timestamp (steps-samples datasource))
         ; remove the location samples that have low accuracy
         loc-seq (filter #(< (accuracy %) 75) loc-seq)
         ; downsampling
         act-seq (downsample act-seq)
-        ; break data points into small segments by gaps
+        ; break data points into small segments if there are missing data gaps
         segments (segment-by-gaps act-seq)
         segments (filter #(> (count %) 1) segments)
 
@@ -162,19 +164,24 @@
                                                         init-transition-matrix
                                                         init-state-prob))
                                     segments)
+        ; remove
         partitions (filter #(not= (:start %) (:end %)) partitions)
         partitions (cond-> partitions
                            (seq partitions) (extend-and-merge-still-partitions  (* 1.5 60 60)))
         ; merge activity segments with location datapoints by the time range of each segment
-        partitions (merge-partitions-with-locations partitions loc-seq)
+        partitions (merge-partitions-with-samples partitions loc-seq :location-samples)
+        ; merge activity segments with steps datapoints by the time range of each segment
+        partitions (merge-partitions-with-samples partitions step-seq :step-samples)
        ]
     ; generate episodes
-    (map (fn [{:keys [state location-samples activity-samples]}]
+    (map (fn [{:keys [state location-samples step-samples activity-samples]}]
            (Episode. state
                      (timestamp (first activity-samples))
                      (timestamp (last activity-samples))
                      activity-samples
-                     location-samples )) partitions)
+                     location-samples
+                     step-samples
+                     )) partitions)
 
     )
   )
