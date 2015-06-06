@@ -16,8 +16,8 @@
                           (t1 #(t2 f))
                           )
                         ))
-(def authorizations-endpoint (str (:shim-endpoint config) "/authorizations"))
-(def moves-shim (str (:shim-endpoint config) "/data/moves/"))
+(def authorizations-endpoint (str (:shim-endpoint @config) "/authorizations"))
+(def moves-shim (str (:shim-endpoint @config) "/data/moves/"))
 (def profile-endpoint (str moves-shim "profile"))
 (def storyline-endpoint (str moves-shim "storyline"))
 
@@ -144,8 +144,8 @@
     (if-let [location-traces (seq location-traces)]
       (algorithms/x-quantile-n-meter-gait-speed
         location-traces
-        (:quantile-of-gait-speed config)
-        (:n-meters-of-gait-speed config))
+        (:quantile-of-gait-speed @config)
+        (:n-meters-of-gait-speed @config))
       )
     )
   )

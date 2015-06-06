@@ -134,7 +134,7 @@
          (> n-meters 0)
          (every? seq location-traces)
          ])
-  (let [filtered-traces (map #(spatial/kalman-filter % (:filter-walking-speed config) 30000) location-traces)
+  (let [filtered-traces (map #(spatial/kalman-filter % (:filter-walking-speed @config) 30000) location-traces)
         speeds (mapcat #(n-meter-gait-speed-over-trace % n-meters) filtered-traces)
         speeds (filter #(< % 4) speeds)
         ]

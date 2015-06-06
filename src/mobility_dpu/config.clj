@@ -1,11 +1,25 @@
-(ns mobility-dpu.config)
+(ns mobility-dpu.config
+  (:require [cheshire.core :as json])
+  )
 
 
-(def config
+(def default
   {:filter-walking-speed 8
    :n-meters-of-gait-speed 50
    :quantile-of-gait-speed 0.9
    :shim-endpoint "http://localhost:8083"
+   :mongodb nil
+   :sync-tasks {:fitbit ["STEPS" "ACTIVITY"]}
+   })
+; parse the config.json file or use the default configuration
+(def config
+  (delay
+    (merge
+      default
+      (if (.exists (clojure.java.io/as-file "config.json"))
+        (json/parse-string (slurp "config.json") true)
+        ))
 
-   }
+
+    )
   )

@@ -2,7 +2,9 @@
   (:require [monger.core :as mg]
             [monger.query :as mq]
             [monger.collection :as mc]
+
             [mobility-dpu.temporal])
+  (:use [mobility-dpu.config])
   (:import (mobility_dpu.protocols DatabaseProtocol DatapointProtocol TimestampedProtocol)))
 
 
@@ -13,7 +15,7 @@
 (defn mongodb
   "Create a MongoDB-backed DatabaseProtocol"
   [db coll]
-  (let [conn (mg/connect)
+  (let [conn (mg/connect (:mongodb @config))
         db (mg/get-db conn db)]
     (reify DatabaseProtocol
       (query [_ ns name user]
