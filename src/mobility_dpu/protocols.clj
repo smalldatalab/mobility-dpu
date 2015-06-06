@@ -27,6 +27,23 @@
   (timestamp [_] "The time when the location smaple is colleted" timestamp)
   )
 
+(defprotocol StepSampleProtocol
+  (duration-start [this] "return start time in joda object")
+  (duration-end [this] "return start time in joda object")
+  (step-count [this] "steps count")
+
+  )
+
+(defrecord StepSample [start end step-count]
+  StepSampleProtocol
+  (duration-start [_] start)
+  (duration-end [_] end)
+  (step-count [_] step-count)
+  TimestampedProtocol
+  (timestamp [_] "The time when the location smaple is colleted" start)
+  )
+
+
 (defprotocol EpisodeProtocol
   "An episode represents a period of time in which the user is in a certain mobility state"
   (state [this] "The mobility state of this episode")
@@ -34,9 +51,10 @@
   (end [this] "end time")
   (activity-trace [this] "activity datapoints")
   (location-trace [this] "location datapoints")
+  (step-trace [this] "step datapoints")
   (trim [this new-start new-end] "trim the period of the episode to the new timeframe")
   )
-(defrecord Episode [inferred-state start end activity-samples location-samples]
+(defrecord Episode [inferred-state start end activity-samples location-samples step-samples]
   EpisodeProtocol
   (state [_] inferred-state)
   (start [_] start)
@@ -48,11 +66,13 @@
       (Episode. (state this) new-start new-end
                 (filter within (activity-trace this))
                 (filter within (location-trace this))
+                (filter within (step-trace this))
                 )
       )
     )
   (location-trace [_] location-samples)
   (activity-trace [_] activity-samples)
+  (step-trace [_] step-samples)
   )
 
 (defprotocol DatabaseProtocol
@@ -69,7 +89,8 @@
   (source-name [this] "Return the name of the data source")
   (activity-samples [this] "Return a list of all the raw activity samples")
   (location-samples [this] "Return a list of all the raw location samples")
-  ; (steps-samples [this] "Return a list of all the step count samples")
+  (steps-samples [this] "Return a list of all the step count samples")
+  (raw-data [this] "Return all the raw data points. (it is mainly used to check if there are any new data)")
   )
 
 

@@ -34,9 +34,16 @@
   "Return the total (kallman-filtered) walking distance in the given segments"
   [on-foot-episodes]
   (let [segs (filter #(> (count (location-trace %)) 1) on-foot-episodes)
-        filtered-traces (map #(spatial/kalman-filter (location-trace %) (:filter-walking-speed config) 30000) segs)]
+        filtered-traces (map #(spatial/kalman-filter (location-trace %) (:filter-walking-speed @config) 30000) segs)]
     (apply + 0 (map spatial/trace-distance filtered-traces))
     )
+  )
+
+(defn- total-step-count
+  "Return the total number of step count in the given segments"
+  [episodes]
+  (apply + 0 (->> (mapcat step-trace episodes)
+                  (map step-count)))
   )
 (defn- infer-home [still-episodes]
   (let [epis (filter :location
@@ -58,8 +65,8 @@
 (defn- gait-speed [on-foot-episodes]
   (algorithms/x-quantile-n-meter-gait-speed
     (filter seq (map location-trace on-foot-episodes))
-    (:quantile-of-gait-speed config)
-    (:n-meters-of-gait-speed config))
+    (:quantile-of-gait-speed @config)
+    (:n-meters-of-gait-speed @config))
   )
 
 
@@ -83,7 +90,7 @@
        :geodiameter-in-km      (geodiameter still-episodes)
        :walking-distance-in-km (walking-distance-in-km on-foot-episdoes)
        :active-time-in-seconds (active-time-in-seconds on-foot-episdoes)
-       :steps nil
+       :steps (total-step-count daily-episodes)
        :gait-speed-in-meter-per-second   (gait-speed on-foot-episdoes)
        :leave-return-home (infer-home still-episodes)
        :coverage       (algorithms/coverage date zone daily-episodes)
