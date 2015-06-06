@@ -77,7 +77,7 @@
                                  :creation-datetime (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
                                  :body {:episodes daily-episodes}})
   )
-(defn summarize [user device date zone daily-episodes]
+(defn summarize [user device date zone daily-episodes step-supported?]
   (let [state-groups (group-by state daily-episodes)
         on-foot-episdoes (:on_foot state-groups)
         still-episodes (:still state-groups)
@@ -90,7 +90,7 @@
        :geodiameter-in-km      (geodiameter still-episodes)
        :walking-distance-in-km (walking-distance-in-km on-foot-episdoes)
        :active-time-in-seconds (active-time-in-seconds on-foot-episdoes)
-       :steps (total-step-count daily-episodes)
+       :steps (if step-supported? (total-step-count daily-episodes))
        :gait-speed-in-meter-per-second   (gait-speed on-foot-episdoes)
        :leave-return-home (infer-home still-episodes)
        :coverage       (algorithms/coverage date zone daily-episodes)

@@ -73,6 +73,7 @@
   (location-trace [_] location-samples)
   (activity-trace [_] activity-samples)
   (step-trace [_] step-samples)
+
   )
 
 (defprotocol DatabaseProtocol
@@ -90,6 +91,7 @@
   (activity-samples [this] "Return a list of all the raw activity samples")
   (location-samples [this] "Return a list of all the raw location samples")
   (steps-samples [this] "Return a list of all the step count samples")
+  (step-supported? [this] "If the data source support the steps count")
   (raw-data [this] "Return all the raw data points. (it is mainly used to check if there are any new data)")
   )
 

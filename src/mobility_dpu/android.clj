@@ -59,7 +59,8 @@
   ; Android does not support steps count
   (steps-samples [_]
     nil)
-
+  (step-supported? [_]
+    false)
   (raw-data [_]
     (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
             (query db "omh" "mobility" user)

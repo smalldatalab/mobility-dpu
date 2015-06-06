@@ -236,7 +236,7 @@
         daily-episode-groups (group-by-day (extract-episodes data-source))]
     (apply concat
      (for [{:keys [date zone episodes] } daily-episode-groups]
-       [(summary/summarize user source date zone episodes)
+       [(summary/summarize user source date zone episodes (step-supported? data-source))
         (summary/segments user source date zone episodes)
         ]
        ))

@@ -100,6 +100,8 @@
       )
 
     )
+  (step-supported? [_]
+    true)
   (raw-data [_]
      (concat (query db "cornell" "mobility-stream-iOS" user)
              )
