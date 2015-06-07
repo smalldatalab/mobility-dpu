@@ -12,7 +12,7 @@
 
 
 (defn get-available-endpoints
-  "return the authorizations the user has"
+  "return service/endpoints that the user has authorize"
   [user sync-tasks]
   (let [body (get-in (client/get authorizations-endpoint
                                  {:query-params     {"username" user}
@@ -26,14 +26,19 @@
 
     )
   )
-(defn to-datapoint [user service schema body]
+(defn to-datapoint
+
+  [user service schema body]
   (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
                  (get-in body [:effective_time_frame :date_time]))]
     (datapoint user "omh" (name schema) (name service) "SENSED" time time body)
     )
 
   )
-(defn get-data [user service endpoint]
+(defn get-data
+  "Send request to shims server to get the NORMALIZED data points.
+  Return nil if the endpoint does not support normalization"
+  [user service endpoint]
   (let [ret (client/get (str data-endpoint "/" (name service) "/" (name endpoint))
                         {:query-params     {"username"  user
                                             "normalize" "true"}
@@ -50,12 +55,18 @@
     )
   )
 
-(defn get-datapoints [user sync-tasks]
+(defn get-datapoints
+  "Return normalized datapoints for the given users from the sync tasks"
+  [user sync-tasks]
   (->>
+    ; get service/endpoints (among the sync-tasks) this user has connected to
     (for [[service endpoints] (get-available-endpoints user sync-tasks)]
+      ;for each endpoint
       (for [endpoint endpoints]
+        ; get data points from the shims server
         (for [[schema datapoints] (:body (get-data user service endpoint))]
           (for [dp datapoints]
+            ; convert the returned data point to the datapoint object that can be stored to the database
             (if dp
               (to-datapoint user service schema dp))
             )

@@ -11,6 +11,8 @@
    :mongodb                nil
    :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
    })
+
+
 ; parse the config.json file or use the default configuration
 (def config
   (delay
