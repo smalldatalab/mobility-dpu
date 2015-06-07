@@ -23,7 +23,7 @@
       {:_id id
        :_class  "org.openmhealth.dsu.domain.DataPoint"
        :user_id user
-       :header { "_id" id,
+       :header { "id" id,
                 "schema_id" { "namespace"  namespace,
                              "name"  schema,
                              "version" { "major"  1, "minor"  0 } },
