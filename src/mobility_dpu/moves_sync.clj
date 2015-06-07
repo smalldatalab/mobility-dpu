@@ -25,9 +25,9 @@
 (def date-time-format (.withOffsetParsed ^DateTimeFormatter (ISODateTimeFormat/basicDateTimeNoMillis)))
 (def date-format (ISODateTimeFormat/basicDate))
 (defn- base-datapoint [user date zone storyline]
-  {:user user
-   :device  "Moves-App"
-   :date  date
+  {:user              user
+   :device            "Moves-App"
+   :date              date
    :creation-datetime (if (:endTime (last storyline))
                         (DateTime/parse (:endTime (last (:segments storyline))) date-time-format)
                         (mobility-dpu.temporal/to-last-millis-of-day date zone))}
@@ -36,10 +36,10 @@
 (defn- get-auths
   "return the authorizations the user has"
   [user]
-  (let [body (get-in (request-throttle #(client/get authorizations-endpoint {:query-params {"username" user}
-                                                                         :as :json
-                                                                         :throw-exceptions false}))
-                        [:body])]
+  (let [body (get-in (request-throttle #(client/get authorizations-endpoint {:query-params     {"username" user}
+                                                                             :as               :json
+                                                                             :throw-exceptions false}))
+                     [:body])]
     (mapcat :auths body)
     )
   )
@@ -48,12 +48,12 @@
 (defn get-profile
   "get the user's Moves profile"
   [user]
-  (let [profile (get-in (request-throttle #(client/get profile-endpoint {:query-params {"username" user}
-                                                                        :as :json
-                                                                        :throw-exceptions false}))
+  (let [profile (get-in (request-throttle #(client/get profile-endpoint {:query-params     {"username" user}
+                                                                         :as               :json
+                                                                         :throw-exceptions false}))
                         [:body :body :profile])]
     (if profile
-      {:first-date (LocalDate/parse (:firstDate profile) date-format)
+      {:first-date   (LocalDate/parse (:firstDate profile) date-format)
        :current-zone (DateTimeZone/forID (get-in profile [:currentTimeZone :id]))})
     )
   )
@@ -69,22 +69,22 @@
               )
             ))
   ([user start til zone]
-    (let [end (t/plus start (t/days 6))
-          end (if (t/after? end til) til end)
-          response (request-throttle #(client/get storyline-endpoint {:query-params {"username" user
-                                                                                    "dateStart" start
-                                                                                    "dateEnd" end}
-                                                                     :as :json
+   (let [end (t/plus start (t/days 6))
+         end (if (t/after? end til) til end)
+         response (request-throttle #(client/get storyline-endpoint {:query-params     {"username"  user
+                                                                                        "dateStart" start
+                                                                                        "dateEnd"   end}
+                                                                     :as               :json
                                                                      :throw-exceptions false
                                                                      }))
-          storylines (get-in response [:body :body])
-          storylines (map #(assoc % :zone zone) storylines)
-          ]
-      (if (= end til)
-        storylines
-        (concat storylines (lazy-seq
-                             (daily-storyline-sequence user (t/plus start (t/days 7)) til zone))))
-      )
+         storylines (get-in response [:body :body])
+         storylines (map #(assoc % :zone zone) storylines)
+         ]
+     (if (= end til)
+       storylines
+       (concat storylines (lazy-seq
+                            (daily-storyline-sequence user (t/plus start (t/days 7)) til zone))))
+     )
     )
   )
 
@@ -92,9 +92,9 @@
 
 
 (def activity-mapping {"transport" :in_vehicle
-                       "cycling" :on_bicycle
-                       "running" :on_foot
-                       "walking" :on_foot})
+                       "cycling"   :on_bicycle
+                       "running"   :on_foot
+                       "walking"   :on_foot})
 
 (def on-foot? #(= (get activity-mapping (:activity %)) :on_foot))
 
@@ -106,17 +106,17 @@
                     )
   )
 
-(defn- filter-and-sum [sequence]  (apply + 0 (filter identity sequence)))
+(defn- filter-and-sum [sequence] (apply + 0 (filter identity sequence)))
 
 (defn- steps [activities] (filter-and-sum
                             (map :steps activities)))
 (defn- active-distance [activities] (/ (filter-and-sum
                                          (map :distance
-                                              (filter on-foot?  activities)))
+                                              (filter on-foot? activities)))
                                        1000))
 (defn- active-duration [activities] (filter-and-sum
                                       (map :duration
-                                           (filter on-foot?  activities))))
+                                           (filter on-foot? activities))))
 (defn- geodiameter [segments]
   (let [locs (map to-location-sample (filter identity (map (comp :location :place) segments)))]
     (algorithms/geodiameter-in-km locs)
@@ -125,8 +125,8 @@
 (defn- infer-home [segments possible-home-location]
   (let [place-segments (filter (comp :location :place) segments)
         episodes (map (fn [{:keys [startTime endTime place]}]
-                        {:start (DateTime/parse startTime date-time-format)
-                         :end (DateTime/parse endTime date-time-format)
+                        {:start    (DateTime/parse startTime date-time-format)
+                         :end      (DateTime/parse endTime date-time-format)
                          :location (to-location-sample (:location place))}
                         ) place-segments)
         ]
@@ -153,7 +153,7 @@
 (defn- coverage [date zone segments]
   (let [episodes (map (fn [{:keys [startTime endTime] :as segment}]
                         {:start (DateTime/parse startTime date-time-format)
-                         :end (DateTime/parse endTime date-time-format)}
+                         :end   (DateTime/parse endTime date-time-format)}
                         ) segments)
         ]
     (algorithms/coverage date zone episodes)
@@ -166,13 +166,13 @@
         activities (filter on-foot? (mapcat :activities daily-segments))]
     (datapoint/summary-datapoint
       (merge (base-datapoint user date zone storyline)
-             {:geodiameter-in-km      (geodiameter daily-segments)
-              :walking-distance-in-km (active-distance activities)
-              :active-time-in-seconds (active-duration activities)
-              :steps (steps activities)
+             {:geodiameter-in-km              (geodiameter daily-segments)
+              :walking-distance-in-km         (active-distance activities)
+              :active-time-in-seconds         (active-duration activities)
+              :steps                          (steps activities)
               :gait-speed-in-meter-per-second (gait-speed activities)
-              :leave-return-home (infer-home daily-segments nil)
-              :coverage (coverage date zone daily-segments)
+              :leave-return-home              (infer-home daily-segments nil)
+              :coverage                       (coverage date zone daily-segments)
               })
       )
     ))
@@ -189,18 +189,18 @@
   ([user] (if (some #(= % "moves") (get-auths user))
             (get-datapoints user (daily-storyline-sequence user))))
   ([user [{:keys [date zone segments] :as storyline} & rest]]
-      (if storyline
-        (if (seq segments)
-          (let [date (LocalDate/parse date date-format)              ]
-            (concat
-              [(segments-datapoint user date zone storyline)
-               (summarize user date zone storyline)]
-              (lazy-seq (get-datapoints user rest))
-              )
-            )
-          (lazy-seq (get-datapoints user rest))
-          )
-        )))
+   (if storyline
+     (if (seq segments)
+       (let [date (LocalDate/parse date date-format)]
+         (concat
+           [(segments-datapoint user date zone storyline)
+            (summarize user date zone storyline)]
+           (lazy-seq (get-datapoints user rest))
+           )
+         )
+       (lazy-seq (get-datapoints user rest))
+       )
+     )))
 
 
 

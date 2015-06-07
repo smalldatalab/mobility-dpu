@@ -10,18 +10,18 @@
 
 (def activity-mapping
   {:transport :in_vehicle
-   :cycling :on_bicycle
-   :cycle :on_bicycle
-   :run :on_foot
-   :walk :on_foot
-   :still :still
-   :unknown :unknown}
+   :cycling   :on_bicycle
+   :cycle     :on_bicycle
+   :run       :on_foot
+   :walk      :on_foot
+   :still     :still
+   :unknown   :unknown}
   ; map iOS probability to numerical value
-)
+  )
 
 (def prob-mapping
-  {:low 0.5
-   :high  0.99
+  {:low    0.5
+   :high   0.99
    :medium 0.75
    })
 (defrecord iOSActivitySample [timestamp sensed-act confidence]
@@ -51,7 +51,7 @@
                 (activity-mapping (keyword activity))
                 (prob-mapping (keyword confidence)))))
           ; convert all data points
-          samples(->> (query db "cornell" "mobility-stream-iOS" user)
+          samples (->> (query db "cornell" "mobility-stream-iOS" user)
                        (filter (comp :activities body))
                        (map dp->sample)
                        (sort-by timestamp))]
@@ -79,22 +79,22 @@
 
     (for [datapoint (filter (comp :location body) (query db "cornell" "mobility-stream-iOS" user))]
 
-      (let [{:keys [accuracy horizontal_accuracy latitude longitude]} (:location (body datapoint)) ]
+      (let [{:keys [accuracy horizontal_accuracy latitude longitude]} (:location (body datapoint))]
         (LocationSample. (timestamp datapoint)
-                            latitude
-                            longitude
-                            (or accuracy horizontal_accuracy))
+                         latitude
+                         longitude
+                         (or accuracy horizontal_accuracy))
         )
       )
     )
   (steps-samples [_]
     (for [datapoint (filter (comp :step_count :pedometer_data body) (query db "cornell" "mobility-stream-iOS" user))]
       (let [zone (.getZone ^DateTime (timestamp datapoint))
-            {:keys [end_date floors_ascended floors_descended step_count start_date distance]} (:pedometer_data (body datapoint)) ]
+            {:keys [end_date floors_ascended floors_descended step_count start_date distance]} (:pedometer_data (body datapoint))]
         (StepSample.
-                     (.withZone (c/from-string start_date) zone)
-                     (.withZone (c/from-string end_date) zone)
-                     step_count
+          (.withZone (c/from-string start_date) zone)
+          (.withZone (c/from-string end_date) zone)
+          step_count
           )
         )
       )
@@ -103,8 +103,8 @@
   (step-supported? [_]
     true)
   (raw-data [_]
-     (concat (query db "cornell" "mobility-stream-iOS" user)
-             )
+    (concat (query db "cornell" "mobility-stream-iOS" user)
+            )
     )
   )
 

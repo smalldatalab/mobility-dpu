@@ -9,7 +9,7 @@
   )
 (defprotocol ActivitySampleProtocol
   (prob-sample-given-state [this s]
-  "return P(Hidden State=s | this sample),  namely, given observing this sample, what is the probability of hidden state being s")
+    "return P(Hidden State=s | this sample),  namely, given observing this sample, what is the probability of hidden state being s")
   )
 
 (defprotocol LocationSampleProtocol
@@ -78,11 +78,11 @@
 
 (defprotocol DatabaseProtocol
   (query [this schema-namespace schema-name user]
-         "query data point of specific schema and user")
+    "query data point of specific schema and user")
   (save [this data]
-         "Save the data point. Replace the existing data point with the same id.")
+    "Save the data point. Replace the existing data point with the same id.")
   (users [this]
-         "Return distinct")
+    "Return distinct")
   )
 
 

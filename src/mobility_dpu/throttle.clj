@@ -14,17 +14,17 @@
   (let [instances (atom (PersistentQueue/EMPTY))]
     (fn [f]
       (let [time-threshold (t/minus (t/now) period)
-            latest-instances (loop [queue @instances]        ; pop the queue til time threshold
+            latest-instances (loop [queue @instances]       ; pop the queue til time threshold
                                (if (and (seq queue) (t/before? (first queue) time-threshold))
                                  (recur (pop queue))
                                  queue
-                              ) )
+                                 ))
             count (count latest-instances)]
         (when (>= count limit)
           (let [sleep (t/in-millis (t/interval time-threshold (first latest-instances)))]
             (info (str "Sleep " sleep " for throttle " period " " limit " " " now count:" count))
             (Thread/sleep sleep))
-        )
+          )
         (reset! instances (conj latest-instances (t/now)))
         (f)
         )

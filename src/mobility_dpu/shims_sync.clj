@@ -15,8 +15,8 @@
   "return the authorizations the user has"
   [user sync-tasks]
   (let [body (get-in (client/get authorizations-endpoint
-                                 {:query-params {"username" user}
-                                  :as :json
+                                 {:query-params     {"username" user}
+                                  :as               :json
                                   :throw-exceptions false})
                      [:body])
         auths (map keyword (mapcat :auths body))
@@ -24,10 +24,8 @@
         ]
     (select-keys sync-tasks auths)
 
-
-
+    )
   )
-)
 (defn to-datapoint [user service schema body]
   (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
                  (get-in body [:effective_time_frame :date_time]))]
@@ -37,9 +35,9 @@
   )
 (defn get-data [user service endpoint]
   (let [ret (client/get (str data-endpoint "/" (name service) "/" (name endpoint))
-                        {:query-params {"username" user
-                                        "normalize" "true"}
-                         :as :json
+                        {:query-params     {"username"  user
+                                            "normalize" "true"}
+                         :as               :json
                          :throw-exceptions false})]
     (cond (= 200 (:status ret))
           (:body ret)

@@ -6,7 +6,7 @@
 
 (defn haversine
   [a b]
-  (let [R 6372.8 ; kilometers
+  (let [R 6372.8                                            ; kilometers
         dlat (Math/toRadians (- (latitude b) (latitude a)))
         dlon (Math/toRadians (- (longitude b) (longitude a)))
         lat1 (Math/toRadians (latitude a))
@@ -73,14 +73,14 @@
   with minimun speed and minimun interval.
   See: http://stackoverflow.com/a/15657798"
   [locs speed min-interval-millis]
-  {:pre [(every? #(satisfies? LocationSampleProtocol %) locs)]
+  {:pre  [(every? #(satisfies? LocationSampleProtocol %) locs)]
    :post [(every? #(satisfies? LocationSampleProtocol %) %)]}
 
 
 
   (let [
         ; downsample the location samples if two samples are too close in time
-        locs  (filter-too-frequent-samples locs min-interval-millis)
+        locs (filter-too-frequent-samples locs min-interval-millis)
         ; initialize the filter
         head (first locs)
         head-accuracy (accuracy head)
@@ -91,7 +91,7 @@
         (let [cur-lat (latitude cur)
               cur-lng (longitude cur)
               cur-accuracy (accuracy cur)
-              cur-time  (timestamp cur)]
+              cur-time (timestamp cur)]
           (let [time-diff (/ (t/in-millis (t/interval time cur-time)) 1000.0)
                 var (+ var (* time-diff speed speed))
                 k (/ var (+ var (* cur-accuracy cur-accuracy)))

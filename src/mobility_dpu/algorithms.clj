@@ -1,9 +1,9 @@
 (ns mobility-dpu.algorithms
   (:require
-            [clj-time.core :as t]
-            [mobility-dpu.spatial :as spatial]
-            [taoensso.timbre :as timbre]
-            [mobility-dpu.temporal :as temporal])
+    [clj-time.core :as t]
+    [mobility-dpu.spatial :as spatial]
+    [taoensso.timbre :as timbre]
+    [mobility-dpu.temporal :as temporal])
   (:use [aprint.core]
         [mobility-dpu.config]
         [mobility-dpu.protocols :only [LocationSampleProtocol timestamp]])
@@ -37,7 +37,7 @@
                             )
                           )]
       (if home-location
-        (let [at-home? #(< (spatial/haversine home-location  (:location %)) 0.2)
+        (let [at-home? #(< (spatial/haversine home-location (:location %)) 0.2)
               [before-leave-home after-leave-home] (split-with at-home? place-episodes)
               leave-home-time (if (and (= first-loc home-location) (seq before-leave-home))
                                 (:end (last before-leave-home)))
@@ -48,9 +48,9 @@
                                  )
               back-home-seconds (apply + 0 (map (comp t/in-seconds duration) (filter at-home? before-return-home)))
               ]
-          {:home home-location
-           :leave_home_time (if ever-leave-home? leave-home-time)
-           :return_home_time (if ever-leave-home? return-home-time)
+          {:home                        home-location
+           :leave_home_time             (if ever-leave-home? leave-home-time)
+           :return_home_time            (if ever-leave-home? return-home-time)
            :time_not_at_home_in_seconds (if ever-leave-home?
                                           (- (t/in-seconds (t/interval leave-home-time return-home-time)) back-home-seconds)
                                           0)
@@ -110,7 +110,6 @@
         )
       )
     )
-
 
   )
 (defn- n-meter-gait-speed-over-trace

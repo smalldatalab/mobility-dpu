@@ -10,7 +10,7 @@
   (:use [aprint.core]
         [mobility-dpu.config]
         [mobility-dpu.protocols])
- )
+  )
 ;;;; The following functions are specific for EpisodeProtocol
 
 (timbre/refer-timbre)
@@ -48,15 +48,14 @@
 (defn- infer-home [still-episodes]
   (let [epis (filter :location
                      (for [epi still-episodes]
-                       {:start (start epi)
-                        :end (end epi)
+                       {:start    (start epi)
+                        :end      (end epi)
                         :location (place epi)}
                        ))]
     (if-let [epis (seq epis)]
       (algorithms/infer-home epis nil)
       )
     )
-
 
   )
 (defn- geodiameter [still-episodes]
@@ -71,11 +70,11 @@
 
 
 (defn segments [user device date zone daily-episodes]
-  (datapoint/segments-datapoint {:user user
-                                 :device device
-                                 :date date
+  (datapoint/segments-datapoint {:user              user
+                                 :device            device
+                                 :date              date
                                  :creation-datetime (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
-                                 :body {:episodes daily-episodes}})
+                                 :body              {:episodes daily-episodes}})
   )
 (defn summarize [user device date zone daily-episodes step-supported?]
   (let [state-groups (group-by state daily-episodes)
@@ -83,17 +82,17 @@
         still-episodes (:still state-groups)
         ]
     (datapoint/summary-datapoint
-      {:user user
-       :device  device
-       :date  date
-       :creation-datetime (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
-       :geodiameter-in-km      (geodiameter still-episodes)
-       :walking-distance-in-km (walking-distance-in-km on-foot-episdoes)
-       :active-time-in-seconds (active-time-in-seconds on-foot-episdoes)
-       :steps (if step-supported? (total-step-count daily-episodes))
-       :gait-speed-in-meter-per-second   (gait-speed on-foot-episdoes)
-       :leave-return-home (infer-home still-episodes)
-       :coverage       (algorithms/coverage date zone daily-episodes)
+      {:user                           user
+       :device                         device
+       :date                           date
+       :creation-datetime              (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
+       :geodiameter-in-km              (geodiameter still-episodes)
+       :walking-distance-in-km         (walking-distance-in-km on-foot-episdoes)
+       :active-time-in-seconds         (active-time-in-seconds on-foot-episdoes)
+       :steps                          (if step-supported? (total-step-count daily-episodes))
+       :gait-speed-in-meter-per-second (gait-speed on-foot-episdoes)
+       :leave-return-home              (infer-home still-episodes)
+       :coverage                       (algorithms/coverage date zone daily-episodes)
        }
       )
     )

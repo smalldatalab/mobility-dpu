@@ -20,12 +20,12 @@
     (reify DatabaseProtocol
       (query [_ ns name user]
         (for [row (mq/with-collection db coll
-                                       (mq/find {"header.schema_id.name" name
-                                                 "header.schema_id.namespace" ns
-                                                 :user_id user})
-                                       (mq/keywordize-fields true)
-                                       (mq/sort {"header.creation_date_time_epoch_milli" 1})
-                                       )]
+                                      (mq/find {"header.schema_id.name"      name
+                                                "header.schema_id.namespace" ns
+                                                :user_id                     user})
+                                      (mq/keywordize-fields true)
+                                      (mq/sort {"header.creation_date_time_epoch_milli" 1})
+                                      )]
           (reify
             DatapointProtocol
             (body [_] (:body row))
@@ -34,9 +34,9 @@
                              (get-in row [:header :creation_date_time])))
             )
           ))
-       (save [_ data]
-          (mc/save db coll data)
-       )
+      (save [_ data]
+        (mc/save db coll data)
+        )
       (users [_] (mc/distinct db "endUser" "_id" {}))
       ))
   )
