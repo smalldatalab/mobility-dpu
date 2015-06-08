@@ -10,15 +10,16 @@
 ## Compile
 * Install [Leiningen 2.+](http://leiningen.org/)
 * Compile standalone jar file with command: 
-    ```bash 
-        lein uberjar
-    ```
+
+```bash 
+      $> lein uberjar
+```
 
 ## Usage
 * Create a *config.json* in the running context's current directory and specify the configuration. If the *config.json* is not found, the DPU will use the default configuration (see [config.json](https://github.com/smalldatalab/mobility-dpu/blob/master/config.json)).
 * Use the following command to start the DPU.
 ```bash
-    $ java -jar mobility-dpu-0.3.0-standalone.jar
+    $> java -jar mobility-dpu-0.3.0-standalone.jar
 ```
 
 # Mobility Data Processing Procedure (for developer only)
