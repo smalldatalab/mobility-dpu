@@ -9,7 +9,7 @@
                
 ## Compile
 * Install [Leiningen 2.+](http://leiningen.org/)
-* Compile standalone jar file with command: 
+* Compile standalone jar file with the bash command: 
 
 ```bash 
       $> lein uberjar
