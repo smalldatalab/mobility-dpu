@@ -1,7 +1,3 @@
-# mobility-dpu
-
-**Mobility DPU** 
-
 ## Description
 * This DPU module is designed to work along side the ohmage-omh DSU and omh-shims server. It periodically perform the following tasks:
     * Generates mobility-data-summary mobility-data-segments from raw data from Mobility App and Moves App
@@ -22,7 +18,7 @@
     $> java -jar mobility-dpu-0.3.0-standalone.jar
 ```
 
-# Mobility Data Processing Procedure (for developer only)
+### Mobility Data Processing Procedure (for developer only)
 * Query Mobility raw activity and location data streams from MongoDB.
 * Break activity data stream into segments, each of which is a sequence of continuous activity samples. 
 * Apply a Hidden Markov Chain model to smooth activity sequence.
