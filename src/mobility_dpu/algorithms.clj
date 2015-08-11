@@ -16,7 +16,7 @@
   (t/interval (:start %) (:end %))
   )
 (defn infer-home
-  "Given a day of segments, return
+  "Given all the episodes in one day, return
   1) time leave/return home,
   2) time not at home in seconds,
   and 3) home location"
@@ -101,7 +101,7 @@
          accum-distance 0
          ]
     (if cur-loc
-      (let [accum-time (+ accum-time (t/in-seconds (t/interval (timestamp last-loc) (timestamp cur-loc))))
+      (let [accum-time (+ accum-time (/ (t/in-millis (t/interval (timestamp last-loc) (timestamp cur-loc))) 1000.0))
             accum-distance (+ accum-distance (* 1000 (spatial/haversine last-loc cur-loc)))]
         (if (> accum-distance meters)
           (/ accum-distance accum-time)
@@ -113,7 +113,7 @@
 
   )
 (defn- n-meter-gait-speed-over-trace
-  "Return all the n-meter gait speeds in a location trace"
+  "Return all the n-meter gait speeds (m/s) in a location trace"
   [location-trace meters]
   {:pre [(every? #(satisfies? LocationSampleProtocol %) location-trace)]}
 
@@ -126,16 +126,16 @@
 
 (defn x-quantile-n-meter-gait-speed
   "Return the x quantile n-meter walking speed after filtered by a kalman filter.
-  Spurious samples of which the speed is over 4 m/s are removed"
+  Spurious samples of which the speed is over 6.7 m/s are removed"
   [location-traces x-quantile n-meters]
   (:pre [(>= x-quantile 0)
          (<= x-quantile 1)
          (> n-meters 0)
          (every? seq location-traces)
          ])
-  (let [filtered-traces (map #(spatial/kalman-filter % (:filter-walking-speed @config) 30000) location-traces)
+  (let [filtered-traces (map #(spatial/kalman-filter % (:filter-walking-speed @config) 10000) location-traces)
         speeds (mapcat #(n-meter-gait-speed-over-trace % n-meters) filtered-traces)
-        speeds (filter #(< % 4) speeds)
+        speeds (filter #(< % (:max-human-speed @config)) speeds)
         ]
     (if (seq speeds)
       (nth (sort speeds) (int (* x-quantile (count speeds)))))
@@ -144,7 +144,7 @@
 
 
 (defn coverage
-  "Return the coverage of the mobility data"
+  "Return the coverage of the mobility data of the day"
   [date zone episodes]
   {:pre [(every? #(and (:start %) (:end %)) episodes)]}
   (let [start-of-date (.toDateTimeAtStartOfDay ^LocalDate date zone)
@@ -158,4 +158,5 @@
     (/ (apply + 0 (map t/in-seconds overlaps)) (t/in-seconds day-interval))
     )
   )
+
 

@@ -4,9 +4,10 @@
 
 
 (def default
-  {:filter-walking-speed   8
+  {:filter-walking-speed   9
    :n-meters-of-gait-speed 50
    :quantile-of-gait-speed 0.9
+   :max-human-speed 7
    :shim-endpoint          "http://localhost:8083"
    :mongodb                nil
    :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}

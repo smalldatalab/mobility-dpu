@@ -30,12 +30,33 @@
                 ))
   )
 
+(defn episode-distance [episode]
+   (+
+     (->
+       (location-trace episode)
+       (spatial/kalman-filter (:filter-walking-speed @config) 3000)
+       (spatial/trace-distance (:max-human-speed @config))
+      )
+     )
+  )
+
 (defn- walking-distance-in-km
-  "Return the total (kallman-filtered) walking distance in the given segments"
+  "Return the total (kallman-filtered) walking distance in the given segment in KM"
   [on-foot-episodes]
-  (let [segs (filter #(> (count (location-trace %)) 1) on-foot-episodes)
-        filtered-traces (map #(spatial/kalman-filter (location-trace %) (:filter-walking-speed @config) 30000) segs)]
-    (apply + 0 (map spatial/trace-distance filtered-traces))
+  (let [segs (filter #(> (count (location-trace %)) 1) on-foot-episodes)]
+    (->> (map episode-distance segs)
+         (apply + 0)
+         )
+    )
+  )
+
+(defn- longest-trek-in-km
+  "Return the total (kallman-filtered) walking distance in the given segment in KM"
+  [on-foot-episodes]
+  (let [segs (filter #(> (count (location-trace %)) 1) on-foot-episodes)]
+    (->> (map episode-distance segs)
+         (apply max 0)
+         )
     )
   )
 
@@ -88,6 +109,7 @@
        :creation-datetime              (or (end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
        :geodiameter-in-km              (geodiameter still-episodes)
        :walking-distance-in-km         (walking-distance-in-km on-foot-episdoes)
+       :longest-trek-in-km             (longest-trek-in-km on-foot-episdoes)
        :active-time-in-seconds         (active-time-in-seconds on-foot-episdoes)
        :steps                          (if step-supported? (total-step-count daily-episodes))
        :gait-speed-in-meter-per-second (gait-speed on-foot-episdoes)

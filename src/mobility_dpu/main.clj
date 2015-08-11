@@ -75,7 +75,7 @@
               source-fn [->AndroidUserDatasource ->iOSUserDatasource]]
         (let [source (source-fn user db)
               raw-data-count (count (raw-data source))]
-          ; only extract data point if there are new raw data
+          ; only compute new data points if there are new raw data that have been uploaded
           (if-not (= raw-data-count (get @user-raw-data-counts [user source-fn]))
             (try (doseq [datapoint (mobility/get-datapoints user (source-fn user db))]
                    (info "Save data for " user " "
