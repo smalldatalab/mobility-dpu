@@ -11,6 +11,7 @@
    :shim-endpoint          "http://localhost:8083"
    :mongodb                nil
    :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
+   :log-file               "/var/log/ohmage-dpu/mobility-dpu.log"
    })
 
 
