@@ -12,7 +12,7 @@
                  [aprint "0.1.1"]
                  [clj-time "0.7.0"]
                  [cheshire "5.4.0"]
-                 [com.taoensso/timbre "3.3.1"]
+                 [com.taoensso/timbre "4.1.4"]
                  [org.ocpsoft.prettytime/prettytime "3.2.7.Final"]
                  [com.novemberain/monger "2.0.1"]
                  [clj-http "1.0.1"]

@@ -2,6 +2,7 @@
   (:gen-class)
   (:require [mobility-dpu.ios]
             [taoensso.timbre :as timbre]
+            [taoensso.timbre.appenders.core :as appenders]
             [mobility-dpu.android]
             [mobility-dpu.mobility :as mobility]
             [mobility-dpu.temporal :refer [dt-parser]]
@@ -21,10 +22,10 @@
 
 ; config logger
 (timbre/refer-timbre)
-(timbre/set-config! [:appenders :spit :enabled?] true)
+(timbre/merge-config!
+  {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
 (def db (mongodb "omh" "dataPoint"))
-(def user-raw-data-counts (atom {}))
 (defn -main
   "The application's main function"
   [& args]
@@ -58,10 +59,13 @@
             )
 
           (catch Exception e (error e)))
-        ; stop to avoid polling service provider too fast
+        ; sleep to avoid polling service provider too fast
         ; FIXME use a more efficient throttle function?
         (Thread/sleep 5000)
         )
+      ; sleep to avoid deplete the API quota
+      (Thread/sleep (* 1000 60 15))
+
       (recur))
     )
 
@@ -75,7 +79,7 @@
               source-fn [->AndroidUserDatasource ->iOSUserDatasource]]
         (let [source (source-fn user db)
               raw-data-count (count (raw-data source))]
-          ; only extract data point if there are new raw data
+          ; only compute new data points if there are new raw data that have been uploaded
           (if-not (= raw-data-count (get @user-raw-data-counts [user source-fn]))
             (try (doseq [datapoint (mobility/get-datapoints user (source-fn user db))]
                    (info "Save data for " user " "

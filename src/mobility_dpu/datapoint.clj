@@ -60,6 +60,7 @@
                                  steps
                                  gait-speed-in-meter-per-second
                                  leave-return-home
+                                 longest-trek-in-km
                                  coverage
                                  ]}]
   {:pre [; these params are not allowed to be nil
@@ -82,6 +83,7 @@
                                                           :quantile   (:quantile-of-gait-speed @config)
                                                           :gait_speed gait-speed-in-meter-per-second
                                                           }
+                     :longest-trek-in-km                 longest-trek-in-km
                      :coverage                           coverage
                      })]
     (mobility-datapoint user device "summary" date creation-datetime body)

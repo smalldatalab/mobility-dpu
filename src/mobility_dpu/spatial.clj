@@ -48,24 +48,15 @@
 
 (defn filter-too-frequent-samples
   "Filter too frequent sample and favor the one with better accuracy."
-  [locs min-interval-millis]
-  (loop [[loc next-loc & rest-locs] locs ret []]
-    (if next-loc
-      (let [time (timestamp loc)
-            next-time (timestamp next-loc)
-            cur-accuracy (accuracy loc)
-            next-accuracy (accuracy next-loc)]
-        (if (< (t/in-millis (t/interval time next-time)) min-interval-millis)
-          (if (< cur-accuracy next-accuracy)
-            (recur rest-locs (conj ret loc))
-            (recur (concat [next-loc] rest-locs) ret)
-            )
-          (recur (concat [next-loc] rest-locs) (conj ret loc))
-          )
-        )
-      (conj ret loc)
+  [[loc & locs] min-interval-millis & [last-loc-time]]
+  (if loc
+    (if (and last-loc-time (< (t/in-millis (t/interval last-loc-time (timestamp loc))) min-interval-millis))
+      (lazy-seq (filter-too-frequent-samples locs min-interval-millis last-loc-time))
+      (cons loc (lazy-seq (filter-too-frequent-samples locs min-interval-millis (timestamp loc))))
       )
-    ))
+    )
+  )
+
 
 
 (defn kalman-filter
@@ -78,8 +69,7 @@
 
 
 
-  (let [
-        ; downsample the location samples if two samples are too close in time
+  (let [; downsample the location samples if two samples are too close in time
         locs (filter-too-frequent-samples locs min-interval-millis)
         ; initialize the filter
         head (first locs)
@@ -108,12 +98,35 @@
 
     ))
 
-(defn trace-distance [location-trace]
+(defn trace-distance
+  "Return the trace's distance in km"
+  [location-trace & [speed-upper-bound-in-m-sec]]
   (loop [origin (first location-trace) [cur & rest] (rest location-trace) sum 0]
-    (if cur (recur cur rest (+ sum (haversine origin cur)))
-            sum)
+
+    (if cur
+      (let [distance-in-km (haversine origin cur)
+            time (/ (t/in-millis (t/interval (timestamp origin) (timestamp cur))) 1000.0)
+            too-fast (> (* (/ distance-in-km time) 1000) speed-upper-bound-in-m-sec)
+            ]
+        (recur
+          ; skip the current location point if the speed is too fast
+          (if too-fast
+            origin
+            cur)
+          rest
+          ; do not include the current distance if the speed is too fast
+          (cond
+            too-fast
+            sum
+            :default
+            (+ sum distance-in-km))))
+      sum)
     )
   )
+
+
+
+
 (defn median-location
   [locs]
   (if (seq locs)

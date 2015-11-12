@@ -108,12 +108,24 @@
 
 (defn- filter-and-sum [sequence] (apply + 0 (filter identity sequence)))
 
-(defn- steps [activities] (filter-and-sum
-                            (map :steps activities)))
-(defn- active-distance [activities] (/ (filter-and-sum
-                                         (map :distance
-                                              (filter on-foot? activities)))
-                                       1000))
+(defn- steps [activities]
+  (filter-and-sum
+    (map :steps activities)))
+
+(defn- active-distance [activities]
+  (/ (filter-and-sum
+       (map :distance
+            (filter on-foot? activities)))
+     1000))
+
+(defn- longest-trek-distance [activities]
+  (->> (filter on-foot? activities)
+       (filter :distance)
+       (map :distance)
+       (apply max 0)
+       (* 0.001)
+       )
+)
 (defn- active-duration [activities] (filter-and-sum
                                       (map :duration
                                            (filter on-foot? activities))))
@@ -168,6 +180,7 @@
       (merge (base-datapoint user date zone storyline)
              {:geodiameter-in-km              (geodiameter daily-segments)
               :walking-distance-in-km         (active-distance activities)
+              :longest-trek-in-km             (longest-trek-distance activities)
               :active-time-in-seconds         (active-duration activities)
               :steps                          (steps activities)
               :gait-speed-in-meter-per-second (gait-speed activities)

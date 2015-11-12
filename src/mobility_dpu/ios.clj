@@ -16,9 +16,10 @@
    :walk      :on_foot
    :still     :still
    :unknown   :unknown}
-  ; map iOS probability to numerical value
+
   )
 
+; map iOS probability to numerical value
 (def prob-mapping
   {:low    0.5
    :high   0.99
@@ -27,12 +28,19 @@
 (defrecord iOSActivitySample [timestamp sensed-act confidence]
   ActivitySampleProtocol
   (prob-sample-given-state [_ state]
+    ; Return P(HiddenState=state/Observation)
     {:pre [(and sensed-act confidence)]}
     ; 1) and if state == the sensed activity state, use the sample confidence
     ; 2) otherwise, prob = (1-confidence) / 3 for the other three states
-    (if (= sensed-act state)
-      confidence
-      (/ (- 1 confidence) 3)))
+    (cond
+      (= sensed-act state)
+        confidence
+      (= sensed-act :unknown)
+        0.25
+      :default
+        (/ (- 1 confidence) 3)
+
+      ))
   TimestampedProtocol
   (timestamp [_] timestamp)
   )
@@ -50,17 +58,34 @@
                 (timestamp dp)
                 (activity-mapping (keyword activity))
                 (prob-mapping (keyword confidence)))))
-          ; convert all data points
+
+          ; convert all activity samples to data points
           samples (->> (query db "cornell" "mobility-stream-iOS" user)
                        (filter (comp :activities body))
                        (map dp->sample)
-                       (sort-by timestamp))]
+                       )
+
+          location-derived-samples
+                    (->>
+                       (query db "cornell" "mobility-stream-iOS" user)
+                       (filter (comp :location body))
+                       (map (fn [dp]
+                              (iOSActivitySample.
+                                (timestamp dp)
+                                :unknown
+                                0.99)
+                              ))
+                               )
+          samples (->> (concat samples location-derived-samples)
+                       (sort-by timestamp))
+          ]
 
       ; FIXME there should be a more computation efficient way to address this issue ....
-      ; Fill in "STILL gaps"
-      ; iOS only returns an activity sample every 4 hours if the user is being still for a extended period.
-      ; Therefore, here we fill in the gap between two "STILL" samples with duplicate STILL samples
-      ; as long as the gap is no more than 4-hour long.
+      ; Fill in "STILL gaps" with dummy STILL data points.
+      ; iOS only returns an activity sample every 4 hours or longer
+      ; if the user is being still for an extended period of time.
+      ; Therefore, here we fill in the gap between two "STILL" samples
+      ; with dummy STILL samples as long as the gap is no more than 4-hour long.
       (flatten
         (for [[cur next] (partition 2 1 samples)]
           (if (and (= (:sensed-act cur) (:sensed-act next) :still)
@@ -76,9 +101,7 @@
       )
     )
   (location-samples [_]
-
     (for [datapoint (filter (comp :location body) (query db "cornell" "mobility-stream-iOS" user))]
-
       (let [{:keys [accuracy horizontal_accuracy latitude longitude]} (:location (body datapoint))]
         (LocationSample. (timestamp datapoint)
                          latitude
@@ -103,8 +126,7 @@
   (step-supported? [_]
     true)
   (raw-data [_]
-    (concat (query db "cornell" "mobility-stream-iOS" user)
-            )
+    (concat (query db "cornell" "mobility-stream-iOS" user))
     )
   )
 

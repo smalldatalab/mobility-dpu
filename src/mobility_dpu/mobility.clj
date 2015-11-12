@@ -149,7 +149,7 @@
         loc-seq (filter #(< (accuracy %) 75) loc-seq)
         ; downsampling
         act-seq (downsample act-seq)
-        ; break data points into small segments if there are missing data gaps
+        ; break the data point sequence into smaller segments at missing data gaps
         segments (segment-by-gaps act-seq)
         segments (filter #(> (count %) 1) segments)
 
@@ -167,7 +167,8 @@
         ; remove
         partitions (filter #(not= (:start %) (:end %)) partitions)
         partitions (cond-> partitions
-                           (seq partitions) (extend-and-merge-still-partitions (* 1.5 60 60)))
+                           (seq partitions)
+                           (extend-and-merge-still-partitions (* 1.5 60 60)))
         ; merge activity segments with location datapoints by the time range of each segment
         partitions (merge-partitions-with-samples partitions loc-seq :location-samples)
         ; merge activity segments with steps datapoints by the time range of each segment
@@ -207,23 +208,24 @@
        ; no more episodes
        (nil? epi)
        (list (create-daily-group date zone group))
-       ; the whole timespan of the current episode is ahead of the group
+       ; when the whole timespan of the current episode is later than the cur group's timespan,
+       ; emit the current group and start and new group of which the start time = the episode's start time
        (t/after? (start epi) group-end-time)
        (cons (create-daily-group date zone group)
              (lazy-seq (group-by-day [] (start epi) episodes)))
-       ; some part of the episode is beyond the time range of the group.
-       (t/after? (end epi) group-end-time)
-       ; add the epi to the current group and move to the next group.
-       ; the start time of the next group is the next millisec of the cur group's end time.
+       ; when a part of the episode is beyond the time range of the group,
+       ; add the episode to the current group and emit the current group.
+       ; At the same time, start a new group where the start time of the new group
+       ; is the next millisec of the cur group's end time.
        ; but the time zone will be the timezone of the end time of the episode
        ; so that when the timezone changed during the episode. (e.g. when daylight saving time occurs)
-       ; the timezone of the group will change accordingly.
+       ; the timezone of the new group will change accordingly.
+       (t/after? (end epi) group-end-time)
        (let [next-group-start-time (t/to-time-zone (t/plus group-end-time (t/millis 1)) (.getZone (end epi)))]
          (cons (create-daily-group date zone (conj group epi))
                (lazy-seq (group-by-day [] next-group-start-time episodes)))
          )
-
-       ; within the group
+       ; the timespan of the episode is fully within the cur group
        :else
        (lazy-seq (group-by-day (conj group epi) group-start-time rest))
        )
