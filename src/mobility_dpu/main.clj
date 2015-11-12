@@ -35,13 +35,14 @@
       (doseq [user (or (seq args) (users db))]
         (try
           (doseq [dp (moves/get-datapoints user)]
-            (info "Save data for " user " "
+            (info "Save moves data for " user " "
                   (get-in dp [:body :date]) " "
                   (get-in dp [:body :device]))
             (save db dp)
             )
           (catch Exception e (error e)))
         )
+      (Thread/sleep (* 1000 60 5))
       (recur))
     )
   ; Create a new thread to sync other shims sync tasks
@@ -51,7 +52,7 @@
         (try
           (doseq [dp (shims/get-datapoints user (:sync-tasks @config))]
 
-            (info "Save data for " user " "
+            (info "Save shim data for " user " "
                   (get-in dp [:header "acquisition_provenance" "source_name"]) " "
                   (get-in dp [:header "creation_date_time"]))
             (save db dp)
@@ -64,7 +65,7 @@
         (Thread/sleep 5000)
         )
       ; sleep to avoid deplete the API quota
-      (Thread/sleep (* 1000 60 15))
+      (Thread/sleep (* 1000 60 5))
 
       (recur))
     )
@@ -82,17 +83,18 @@
           ; only compute new data points if there are new raw data that have been uploaded
           (if-not (= raw-data-count (get @user-raw-data-counts [user source-fn]))
             (try (doseq [datapoint (mobility/get-datapoints user (source-fn user db))]
-                   (info "Save data for " user " "
+                   (info "Save mobility data for " user " "
                          (get-in datapoint [:body :date]) " "
                          (get-in datapoint [:body :device]))
                    (save db datapoint))
                  ; store number of raw data counts to check data update in the future
                  (swap! user-raw-data-counts assoc [user source-fn] raw-data-count)
                  (catch Exception e (error e)))
-            (info "No new data for " user)
+            (info "No new mobility data for " user)
             )
           )
         )
+      (Thread/sleep (* 1000 60 5))
       (recur)
       )
     )
