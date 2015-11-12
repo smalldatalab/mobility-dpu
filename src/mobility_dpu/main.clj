@@ -35,7 +35,7 @@
       (doseq [user (or (seq args) (users db))]
         (try
           (doseq [dp (moves/get-datapoints user)]
-            (info "Save moves data for " user " "
+            (info "MOVES - Saving moves data for " user " "
                   (get-in dp [:body :date]) " "
                   (get-in dp [:body :device]))
             (save db dp)
@@ -52,8 +52,9 @@
         (try
           (doseq [dp (shims/get-datapoints user (:sync-tasks @config))]
 
-            (info "Save shim data for " user " "
+            (info "SHIMS - Saving data for " user " "
                   (get-in dp [:header "acquisition_provenance" "source_name"]) " "
+                  (get-in dp [:header "schema_id" "name"]) " "
                   (get-in dp [:header "creation_date_time"]))
             (save db dp)
 
@@ -83,14 +84,15 @@
           ; only compute new data points if there are new raw data that have been uploaded
           (if-not (= raw-data-count (get @user-raw-data-counts [user source-fn]))
             (try (doseq [datapoint (mobility/get-datapoints user (source-fn user db))]
-                   (info "Save mobility data for " user " "
+                   (info "MOBILITY - Saving data for " user " "
+                         source-fn " "
                          (get-in datapoint [:body :date]) " "
                          (get-in datapoint [:body :device]))
                    (save db datapoint))
                  ; store number of raw data counts to check data update in the future
                  (swap! user-raw-data-counts assoc [user source-fn] raw-data-count)
                  (catch Exception e (error e)))
-            (info "No new mobility data for " user)
+            (info "MOBILITY - No new data for " user " " source-fn)
             )
           )
         )
