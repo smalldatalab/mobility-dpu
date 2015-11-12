@@ -7,7 +7,7 @@
         "host" :"omh-mongo",
         "port" :27017
     },
-    "log-file": "/var/log/ohmage-dpu/mobility-dpu.log",
+    "log-file": "/var/log/ohmage-dpu/clojure.log",
     "sync-tasks": {
         "fitbit": ["STEPS", "ACTIVITY"]
     }

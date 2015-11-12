@@ -8,10 +8,10 @@
    :n-meters-of-gait-speed 50
    :quantile-of-gait-speed 0.9
    :max-human-speed 7
-   :shim-endpoint          "http://localhost:8083"
+   :shim-endpoint          "http://ohmage-shim:8084"
    :mongodb                nil
    :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
-   :log-file               "/var/log/ohmage-dpu/mobility-dpu.log"
+   :log-file               "/var/log/ohmage-dpu/clojure.log"
    })
 
 

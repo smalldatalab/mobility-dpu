@@ -1,11 +1,12 @@
 FROM java:openjdk-8-jre
 MAINTAINER Jared Sieling <jared.sieling@gmail.com>
 
-ENV SERVER_PREFIX /opt/ohmage/mobility-dpu
+ENV APP_DIR /app
  
-RUN mkdir -p $SERVER_PREFIX
-ADD mobility-dpu.jar $SERVER_PREFIX/
-ADD config.json $SERVER_PREFIX/
+RUN mkdir -p $APP_DIR
+ADD mobility-dpu.jar $APP_DIR/
+ADD config.json $APP_DIR/
 EXPOSE 8085
 
-CMD /usr/bin/java -jar $SERVER_PREFIX/mobility-dpu.jar --spring.config.location=file:$SERVER_PREFIX/
+WORKDIR $APP_DIR
+CMD java -jar "mobility-dpu.jar" -Xms256M -Xmx512M -XX:MaxMetaspaceSize=256m
