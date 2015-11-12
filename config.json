@@ -7,6 +7,7 @@
         "host" :"127.0.0.1",
         "port" :27017
     },
+    "log-file": "/var/log/ohmage-dpu/mobility-dpu.log",
     "sync-tasks": {
         "fitbit": ["STEPS", "ACTIVITY"]
     }
