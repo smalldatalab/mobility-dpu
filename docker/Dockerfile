@@ -9,4 +9,4 @@ ADD config.json $APP_DIR/
 EXPOSE 8085
 
 WORKDIR $APP_DIR
-CMD java -jar "mobility-dpu.jar" -Xms256M -Xmx512M -XX:MaxMetaspaceSize=256m
+CMD java -Xms256M -Xmx512M -XX:MaxMetaspaceSize=256m -jar "mobility-dpu.jar"
