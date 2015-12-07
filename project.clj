@@ -6,7 +6,7 @@
   :main ^:skip-aot mobility-dpu.main
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
-  :resource-paths ["/home/changun/Desktop/inflib.jar"]
+  :jvm-opts ["-Xmx1g" "-server"]
   :plugins [[lein-localrepo "0.5.3"]]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [aprint "0.1.1"]
@@ -16,6 +16,7 @@
                  [org.ocpsoft.prettytime/prettytime "3.2.7.Final"]
                  [com.novemberain/monger "2.0.1"]
                  [clj-http "1.0.1"]
-
+                 [org.apache.commons/commons-math3 "3.5"]
+                 [prismatic/schema "1.0.3"]
 
                  ])
