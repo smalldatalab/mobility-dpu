@@ -3,66 +3,104 @@
     [clj-time.core :as t]
     [mobility-dpu.spatial :as spatial]
     [taoensso.timbre :as timbre]
-    [mobility-dpu.temporal :as temporal])
+    [mobility-dpu.temporal :as temporal]
+    [schema.core :as s]
+    [clj-time.coerce :as c])
   (:use [aprint.core]
         [mobility-dpu.config]
-        [mobility-dpu.protocols :only [LocationSampleProtocol timestamp]])
-  (:import (org.joda.time LocalDate Interval)
+        [mobility-dpu.protocols ])
+  (:import (org.joda.time LocalDate Interval DateTime)
            ))
 
 (timbre/refer-timbre)
 
-(defn duration [%]
-  (t/interval (:start %) (:end %))
-  )
-(defn infer-home
-  "Given all the episodes in one day, return
-  1) time leave/return home,
-  2) time not at home in seconds,
-  and 3) home location"
-  [place-episodes possible-home-location]
-  {:pre [(seq place-episodes)
-         (every? #(and (:location %) (:start %) (:end %)) place-episodes)
-         (or (nil? possible-home-location) (satisfies? LocationSampleProtocol possible-home-location))]}
-  (let [first-loc (:location (first place-episodes))
-        last-loc (:location (last place-episodes))]
-    (let [home-location (if (< (spatial/haversine first-loc last-loc) 0.2)
-                          first-loc
-                          (if possible-home-location
-                            (cond (< (spatial/haversine possible-home-location first-loc) 0.2)
-                                  first-loc
-                                  (< (spatial/haversine possible-home-location last-loc) 0.2)
-                                  last-loc
-                                  )
-                            )
-                          )]
-      (if home-location
-        (let [at-home? #(< (spatial/haversine home-location (:location %)) 0.2)
-              [before-leave-home after-leave-home] (split-with at-home? place-episodes)
-              leave-home-time (if (and (= first-loc home-location) (seq before-leave-home))
-                                (:end (last before-leave-home)))
-              ever-leave-home? (seq after-leave-home)
-              [after-return-home before-return-home] (map reverse (split-with at-home? (reverse after-leave-home)))
-              return-home-time (if (seq after-return-home)
-                                 (:start (first after-return-home))
-                                 )
-              back-home-seconds (apply + 0 (map (comp t/in-seconds duration) (filter at-home? before-return-home)))
-              ]
-          {:home                        home-location
-           :leave_home_time             (if ever-leave-home? leave-home-time)
-           :return_home_time            (if ever-leave-home? return-home-time)
-           :time_not_at_home_in_seconds (if ever-leave-home?
-                                          (- (t/in-seconds (t/interval leave-home-time return-home-time)) back-home-seconds)
-                                          0)
-           })
-        {}
-        )
+(s/defn infer-home
+  "Divide the episodes sequence into 5 segemnts:
+
+  (scan from the begining)
+  1) before getting home at midnight
+  2) before leave home at morning
+
+  3) befor going back home
+
+  (scan reversely from the end)
+  4) after going back home
+  5) after leaving home at midnight
+  "
+  [episodes :- [EpisodeSchema]]
+
+  (let [place-episodes (filter #(= (:inferred-state %) :still) episodes)
+        [before-get-home-at-midnight after-get-home]
+        (split-with (complement :home?) place-episodes)
+        [befroe-leave-home after-leave-home]
+        (split-with :home? after-get-home)
+        [after-leave-home-at-night before-leave-home-at-night]
+        (->> (split-with  (complement :home?) (reverse after-leave-home))
+             (map reverse))
+        [after-return-home time-between-leave-and-return]
+        (->> (split-with  :home? (reverse before-leave-home-at-night))
+             (map reverse))
+        time-before-get-home-at-midnight (if (seq before-get-home-at-midnight)
+                                           (t/in-seconds
+                                             (t/interval  (.withTimeAtStartOfDay ^DateTime (:end (last before-get-home-at-midnight)))
+                                                          (:end (last before-get-home-at-midnight))))
+                                           0)
+        time-after-leaving-home-at-night  (if (seq after-leave-home-at-night)
+                                            (t/in-seconds
+                                              (t/interval (:start (first after-leave-home-at-night))
+                                                          (-> (first after-leave-home-at-night)
+                                                              :start
+                                                              (t/plus (t/days 1))
+                                                              (.withTimeAtStartOfDay)
+                                                              (t/minus (t/millis 1))
+                                                              )
+                                                          ))
+                                            0)
+        time-temporary-back-home (->>
+                       time-between-leave-and-return
+                       (filter :home?)
+                       (map #(t/in-seconds (t/interval (:start %)(:end %))))
+                       (apply + 0))
+
+        time-not-at-home (+ time-before-get-home-at-midnight time-after-leaving-home-at-night (- time-temporary-back-home))
+        ever-at-home? (seq (concat after-get-home after-return-home))
+        ever-leave-home? (seq (concat after-leave-home ))
+        ]
+
+    (cond
+
+      (and ever-at-home? (seq befroe-leave-home) (seq after-return-home))
+      {:leave_home_time             (:end (last befroe-leave-home))
+       :return_home_time            (:start (first after-return-home))
+       :time_not_at_home_in_seconds (+ (t/in-seconds
+                                         (t/interval (:end (last befroe-leave-home))
+                                                     (:start (first after-return-home))))
+                                       time-not-at-home
+                                       )
+       }
+      ; return home at midnight and never leave home again
+      (and ever-at-home? (seq before-get-home-at-midnight) (not ever-leave-home?))
+      {:time_not_at_home_in_seconds time-not-at-home
+       :return_home_time (:end (last before-get-home-at-midnight))}
+      ; leave home at some point and never return home
+      (and ever-at-home? (seq after-leave-home-at-night)
+           (>= (t/hour (:end (last episodes))) 22))
+      {:time_not_at_home_in_seconds time-not-at-home
+       :leave_home_time (:start (first after-leave-home-at-night))}
+      ; never leave home
+      (and ever-at-home? (not ever-leave-home?))
+      {:time_not_at_home_in_seconds time-not-at-home}
+
       )
+
     )
+
+
+
   )
 
-(defn geodiameter-in-km [locations]
-  {:pre [(every? #(satisfies? LocationSampleProtocol %) locations)]}
+(s/defn geodiameter-in-km :- s/Num
+  [locations :- [Location]]
   (apply max 0 (for [l1 locations
                      l2 locations]
                  (spatial/haversine l1 l2)
@@ -115,8 +153,6 @@
 (defn- n-meter-gait-speed-over-trace
   "Return all the n-meter gait speeds (m/s) in a location trace"
   [location-trace meters]
-  {:pre [(every? #(satisfies? LocationSampleProtocol %) location-trace)]}
-
   (if (seq location-trace)
     (if-let [speed-from-head (n-meter-gait-speed-from-head location-trace meters)]
       (cons speed-from-head (lazy-seq (n-meter-gait-speed-over-trace (rest location-trace) meters)))

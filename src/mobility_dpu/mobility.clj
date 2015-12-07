@@ -9,11 +9,14 @@
             [clj-time.coerce :as c]
             [mobility-dpu.temporal :as temporal]
             [mobility-dpu.summary :as summary]
-            [mobility-dpu.datapoint :as datapoint])
+
+            [mobility-dpu.spatial :as spatial]
+            [schema.core :as s])
   (:use [aprint.core]
-        [mobility-dpu.protocols])
+        [mobility-dpu.protocols]
+        [mobility-dpu.process-episode])
   (:import
-    (mobility_dpu.protocols Episode)
+    (mobility_dpu.protocols Episode LocationSample StepSample)
     (org.joda.time DateTime)))
 
 (timbre/refer-timbre)
@@ -34,8 +37,9 @@
 
 
 
-(defn- downsample
-  ([[first & rest]]
+(s/defn downsample :- [(s/protocol TimestampedProtocol)]
+  "Drop some samples in the given sequence of timestamped samples so that the sampling frequency is no higher than 20 seconds "
+  ([[first & rest] :- [(s/protocol TimestampedProtocol)]]
    (if first
      (cons first (lazy-seq (downsample (timestamp first) rest)))
      nil
@@ -50,8 +54,9 @@
     )
   )
 
-(defn- segment-by-gaps
-  ([[head & rest]] (segment-by-gaps [head] rest))
+(s/defn segment-by-gaps :- [[(s/protocol TimestampedProtocol)]]
+  "Segments a sequence of timestamped samples into subsequences if there are gaps that is longer than 7-minute long"
+  ([[head & rest] :- [(s/protocol TimestampedProtocol)]] (segment-by-gaps [head] rest))
   ([cur-group [head & rest]]
    (if head
      (if (< (t/in-minutes (t/interval (timestamp (last cur-group)) (timestamp head))) 7)
@@ -61,20 +66,22 @@
      [cur-group])
     )
   )
-(defn- hmm-partition
+
+(def HMM-Partition
+  {:state State
+   :start (s/protocol t/DateTimeProtocol)
+   :end (s/protocol t/DateTimeProtocol)
+   })
+
+(s/defn hmm-partition :- [HMM-Partition]
   "Partition a seq of activity samples where consecutive samples with the same inferred state are partitioned into one segments"
-  [segment transition-matrix first-x-prob]
-  {:pre [(every? identity (map first-x-prob states))
-         (= (* (count states) (count states)) (count (keys transition-matrix)))
-         (every? #(<= 0 % 1) (for [obs segment state states] (prob-sample-given-state obs state)))
-         ]}
-  (let [inferred-states (hmm/hmm segment transition-matrix first-x-prob)
+  [segment :- [(s/protocol ActivitySampleProtocol)]]
+  (let [inferred-states (hmm/hmm segment init-transition-matrix init-state-prob)
         partitions (partition-by :state (map #(sorted-map :state %1 :sample %2) inferred-states segment))]
     (for [partition partitions]
       {:state            (:state (first partition))
        :start            (timestamp (:sample (first partition)))
-       :end              (timestamp (:sample (last partition)))
-       :activity-samples (map :sample partition)}
+       :end              (timestamp (:sample (last partition)))}
       )
     )
   )
@@ -116,37 +123,21 @@
     )
   )
 
-(defn- merge-partitions-with-samples
-  "Merge the activity segments with the location samples based on timestamps"
-  [partitions samples key]
-  (loop [[head & rest] partitions
-         samples samples
-         ret []]
-    (if head
-      (let [{:keys [start end]} head
-            start (t/minus start (t/seconds 1))
-            samples (drop-while #(t/before? (timestamp %) start) samples)
-            [within over] (split-with #(t/within? start end (timestamp %)) samples)
-            head (assoc head key within)]
-        (recur rest over (conj ret head))
-        )
-      ret)
-    )
-  )
 
 
 
 
 
-(defn extract-episodes [datasource]
-  {:pre  (satisfies? DatabaseProtocol datasource)
-   :post (map (fn [e] satisfies? EpisodeProtocol e) %)}
 
-  (let [act-seq (sort-by timestamp (activity-samples datasource))
-        loc-seq (sort-by timestamp (location-samples datasource))
-        step-seq (sort-by timestamp (steps-samples datasource))
+(s/defn extract-episodes :- [EpisodeSchema]
+  [datasource :- (s/protocol UserDataSourceProtocol)]
+  "Extract episodes from the given data source."
+
+  (let [act-seq (sort-by timestamp (s/validate [(s/protocol ActivitySampleProtocol)] (activity-samples datasource)))
+        loc-seq (sort-by timestamp (s/validate [LocationSample] (location-samples datasource)))
+        step-seq (sort-by timestamp (s/validate [StepSample] (steps-samples datasource)) )
         ; remove the location samples that have low accuracy
-        loc-seq (filter #(< (accuracy %) 75) loc-seq)
+        loc-seq (filter #(< (:accuracy %) 75) loc-seq)
         ; downsampling
         act-seq (downsample act-seq)
         ; break the data point sequence into smaller segments at missing data gaps
@@ -160,84 +151,62 @@
         ;  :end END TIME
         ;  :state  THE INFFERED STATE
         ;  :activity-samples THE RAW SAMPLES}
-        partitions (mapcat (fn [segment] (hmm-partition segment
-                                                        init-transition-matrix
-                                                        init-state-prob))
-                           segments)
-        ; remove
+        partitions (mapcat (fn [segment] (hmm-partition segment)) segments)
+        ; remove 0-length partitions
         partitions (filter #(not= (:start %) (:end %)) partitions)
-        partitions (cond-> partitions
+
+
+        ;partitions
+        _ (comment (cond-> partitions
                            (seq partitions)
-                           (extend-and-merge-still-partitions (* 1.5 60 60)))
-        ; merge activity segments with location datapoints by the time range of each segment
-        partitions (merge-partitions-with-samples partitions loc-seq :location-samples)
-        ; merge activity segments with steps datapoints by the time range of each segment
-        partitions (merge-partitions-with-samples partitions step-seq :step-samples)
+                           (extend-and-merge-still-partitions (* 1.5 60 60))))
         ]
     ; generate episodes
-    (map (fn [{:keys [state location-samples step-samples activity-samples]}]
-           (Episode. state
-                     (timestamp (first activity-samples))
-                     (timestamp (last activity-samples))
-                     activity-samples
-                     location-samples
-                     step-samples
-                     )) partitions)
+    (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
+      (if p
+        (let [split (fn [seq]
+                      (->> seq
+                           (drop-while #(t/before? (timestamp %) (:start p)))
+                           (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
+                           )
+                      )
+              [act-before act-after] (split act-seq)
+              [loc-before loc-after] (split loc-seq)
+              [step-before step-after] (split step-seq)
+              episdoe (->Episode (:state p)
+                                 (:start p)
+                                 (:end p)
+                                 (->TraceData
+                                   act-before
+                                   loc-before
+                                   step-before
+                                   ))
+              ]
+          (recur ps act-after loc-after step-after (conj episodes episdoe))
+          )
+        episodes
+        )
+
+
+      )
+
 
     )
   )
 
-
-(defn- create-daily-group [date zone episodes]
-  {:date     date
-   :zone     zone
-   :episodes (map (partial temporal/trim-episode-to-day-range date zone) episodes)}
-  )
-
-
-(defn group-by-day
-  "Group epidsode segment by days. A segment can belong to mutiple groups if it span across multiple days"
-  ([episodes] (let [episodes (sort-by start episodes)]
-                (if (seq episodes)
-                  (group-by-day [] (start (first episodes)) episodes))))
-  ([group group-start-time [epi & rest :as episodes]]
-   (let [date (c/to-local-date group-start-time)
-         zone (.getZone ^DateTime group-start-time)
-         group-end-time (temporal/to-last-millis-of-day date zone)]
-     (cond
-       ; no more episodes
-       (nil? epi)
-       (list (create-daily-group date zone group))
-       ; when the whole timespan of the current episode is later than the cur group's timespan,
-       ; emit the current group and start and new group of which the start time = the episode's start time
-       (t/after? (start epi) group-end-time)
-       (cons (create-daily-group date zone group)
-             (lazy-seq (group-by-day [] (start epi) episodes)))
-       ; when a part of the episode is beyond the time range of the group,
-       ; add the episode to the current group and emit the current group.
-       ; At the same time, start a new group where the start time of the new group
-       ; is the next millisec of the cur group's end time.
-       ; but the time zone will be the timezone of the end time of the episode
-       ; so that when the timezone changed during the episode. (e.g. when daylight saving time occurs)
-       ; the timezone of the new group will change accordingly.
-       (t/after? (end epi) group-end-time)
-       (let [next-group-start-time (t/to-time-zone (t/plus group-end-time (t/millis 1)) (.getZone (end epi)))]
-         (cons (create-daily-group date zone (conj group epi))
-               (lazy-seq (group-by-day [] next-group-start-time episodes)))
-         )
-       ; the timespan of the episode is fully within the cur group
-       :else
-       (lazy-seq (group-by-day (conj group epi) group-start-time rest))
-       )
-     )
-    )
-  )
 
 (defn get-datapoints [user data-source]
   (let [source (source-name data-source)
-        daily-episode-groups (group-by-day (extract-episodes data-source))]
+        episodes (-> (extract-episodes data-source)
+                     (assoc-cluster 50 20)
+                     (merge-still-epidoses))
+        home-clusters (infer-home-clusters episodes)
+        episodes (map #(cond-> %
+                               (home-clusters (:cluster %))
+                               (assoc :home? true)) episodes)
+        ]
     (apply concat
-           (for [{:keys [date zone episodes]} daily-episode-groups]
+           (for [{:keys [date zone episodes]} (group-by-day episodes)]
              [(summary/summarize user source date zone episodes (step-supported? data-source))
               (summary/segments user source date zone episodes)
               ]
@@ -246,20 +215,15 @@
   )
 
 
+(use 'mobility-dpu.database)
+(use 'mobility-dpu.android)
+(def epis (-> (extract-episodes
+                (->AndroidUserDatasource
+                  "google:108274213374340954232"
+                  (mongodb "omh" "dataPoint")))
+              (assoc-cluster 50 20)
+              (merge-still-epidoses)))
 
-
-
-(comment                                                    ; FIXME not sure if the following function is needed anymore.
-  (map (fn [{:keys [displacement-speed inferred-activity duration-in-seconds] :as seg}]
-         ; deal with subway cases
-         (if (and (= inferred-activity :still)
-                  displacement-speed
-                  (>= displacement-speed 1)
-                  (> duration-in-seconds 120)
-                  )
-           (assoc seg :inferred-activity :in_vehicle)
-           seg)
-         ) act-loc))
 
 
 

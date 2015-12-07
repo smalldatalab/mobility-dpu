@@ -1,16 +1,19 @@
 (ns mobility-dpu.spatial
-  (:require [clj-time.core :as t])
+  (:require [clj-time.core :as t]
+            [schema.core :as s])
   (:use [mobility-dpu.protocols]
         [aprint.core])
   (:import (mobility_dpu.protocols LocationSample)))
 
-(defn haversine
-  [a b]
+(s/defn haversine :- s/Num
+  [a :- Location
+   b :- Location]
+  "Return distance between two points in the kilometers"
   (let [R 6372.8                                            ; kilometers
-        dlat (Math/toRadians (- (latitude b) (latitude a)))
-        dlon (Math/toRadians (- (longitude b) (longitude a)))
-        lat1 (Math/toRadians (latitude a))
-        lat2 (Math/toRadians (latitude b))
+        dlat (Math/toRadians (- ^double (:latitude b) ^double (:latitude a)))
+        dlon (Math/toRadians (- ^double (:longitude b) ^double (:longitude a)))
+        lat1 (Math/toRadians ^double (:latitude a))
+        lat2 (Math/toRadians ^double  (:latitude b))
         a (+ (* (Math/sin (/ dlat 2)) (Math/sin (/ dlat 2))) (* (Math/sin (/ dlon 2)) (Math/sin (/ dlon 2)) (Math/cos lat1) (Math/cos lat2)))]
     (* R 2 (Math/asin (Math/sqrt a)))))
 
@@ -59,13 +62,12 @@
 
 
 
-(defn kalman-filter
+(s/defn kalman-filter
   "Apply kalman filter to the given location samples
   with minimun speed and minimun interval.
   See: http://stackoverflow.com/a/15657798"
-  [locs speed min-interval-millis]
-  {:pre  [(every? #(satisfies? LocationSampleProtocol %) locs)]
-   :post [(every? #(satisfies? LocationSampleProtocol %) %)]}
+  [locs :- [LocationSample] speed min-interval-millis]
+
 
 
 
@@ -73,14 +75,14 @@
         locs (filter-too-frequent-samples locs min-interval-millis)
         ; initialize the filter
         head (first locs)
-        head-accuracy (accuracy head)
+        head-accuracy (:accuracy head)
         ]
-    (loop [[cur & locs] (rest locs) lat (latitude head) lng (longitude head)
+    (loop [[cur & locs] (rest locs) lat (:latitude head) lng (:longitude head)
            var (* head-accuracy head-accuracy) time (timestamp head) ret [head]]
       (if cur
-        (let [cur-lat (latitude cur)
-              cur-lng (longitude cur)
-              cur-accuracy (accuracy cur)
+        (let [cur-lat (:latitude cur)
+              cur-lng (:longitude cur)
+              cur-accuracy (:accuracy cur)
               cur-time (timestamp cur)]
           (let [time-diff (/ (t/in-millis (t/interval time cur-time)) 1000.0)
                 var (+ var (* time-diff speed speed))
@@ -98,9 +100,9 @@
 
     ))
 
-(defn trace-distance
+(s/defn trace-distance
   "Return the trace's distance in km"
-  [location-trace & [speed-upper-bound-in-m-sec]]
+  [location-trace :- [LocationSample] & [speed-upper-bound-in-m-sec]]
   (loop [origin (first location-trace) [cur & rest] (rest location-trace) sum 0]
 
     (if cur
@@ -127,19 +129,14 @@
 
 
 
-(defn median-location
-  [locs]
+(s/defn median-location :- Location [locs :- [Location]]
   (if (seq locs)
     (let [middle (/ (count locs) 2)
-          times (sort (map timestamp locs))
-          lats (sort (map latitude locs))
-          lngs (sort (map longitude locs))
-          accu (sort (map accuracy locs))]
-      (->LocationSample (nth times middle)
-                        (nth lats middle)
-                        (nth lngs middle)
-                        (nth accu middle)
-                        )
+          lats (sort (map :latitude locs))
+          lngs (sort (map :longitude locs))]
+      {:latitude (nth lats middle)
+       :longitude (nth lngs middle)}
       )
-    nil)
+    )
   )
+

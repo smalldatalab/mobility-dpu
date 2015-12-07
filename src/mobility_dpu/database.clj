@@ -5,7 +5,7 @@
 
             [mobility-dpu.temporal])
   (:use [mobility-dpu.config])
-  (:import (mobility_dpu.protocols DatabaseProtocol DatapointProtocol TimestampedProtocol)))
+  (:import (mobility_dpu.protocols DatabaseProtocol DataPointRecord)))
 
 
 
@@ -26,13 +26,10 @@
                                       (mq/keywordize-fields true)
                                       (mq/sort {"header.creation_date_time_epoch_milli" 1})
                                       )]
-          (reify
-            DatapointProtocol
-            (body [_] (:body row))
-            TimestampedProtocol
-            (timestamp [_] (mobility-dpu.temporal/dt-parser
-                             (get-in row [:header :creation_date_time])))
-            )
+          (DataPointRecord.
+            (:body row)
+            (mobility-dpu.temporal/dt-parser
+              (get-in row [:header :creation_date_time])))
           ))
       (save [_ data]
         (mc/save db coll data)

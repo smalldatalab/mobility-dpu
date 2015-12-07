@@ -79,7 +79,7 @@
                      :active_time_in_seconds             active-time-in-seconds
                      :steps                              steps
                      :max_gait_speed_in_meter_per_second gait-speed-in-meter-per-second
-                     :gait_speed                         {:n_meters   (:n-meter-of-gait-speed @config)
+                     :gait_speed                         {:n_meters   (:n-meters-of-gait-speed @config)
                                                           :quantile   (:quantile-of-gait-speed @config)
                                                           :gait_speed gait-speed-in-meter-per-second
                                                           }
