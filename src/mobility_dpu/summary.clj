@@ -10,7 +10,9 @@
     [schema.core :as s])
   (:use [aprint.core]
         [mobility-dpu.config]
-        [mobility-dpu.protocols])
+        [mobility-dpu.protocols]
+        [mobility-dpu.process-episode]
+        )
   )
 ;;;; The following functions are specific for EpisodeProtocol
 
@@ -32,13 +34,12 @@
   )
 
 (defn episode-distance [episode]
-   (+
-     (->
-       (:location-trace (:trace-data episode))
-       (spatial/kalman-filter (:filter-walking-speed @config) 3000)
-       (spatial/trace-distance (:max-human-speed @config))
-      )
-     )
+  (or (:distance episode)
+      (->
+        (:location-trace (:trace-data episode))
+        (spatial/kalman-filter (:filter-walking-speed @config) 3000)
+        (spatial/trace-distance (:max-human-speed @config))
+        ))
   )
 
 (s/defn walking-distance-in-km :- s/Num
@@ -46,7 +47,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(> (count (:location-trace (:trace-data %))) 1) )
+       (filter #(or (> (count (:location-trace (:trace-data %))) 1) (:distance %)) )
        (map episode-distance)
        (apply + 0)
        )
@@ -57,7 +58,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(> (count (:location-trace (:trace-data %))) 1) )
+       (filter #(or (> (count (:location-trace (:trace-data %))) 1) (:distance %)) )
        (map episode-distance)
        (apply max 0)
        )
@@ -90,29 +91,51 @@
   )
 
 
-(defn segments [user device date zone daily-episodes]
-  (datapoint/segments-datapoint {:user              user
-                                 :device            device
-                                 :date              date
-                                 :creation-datetime (or (:end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
-                                 :body              {:episodes daily-episodes}})
+(s/defn segments [user :- s/Str device :- s/Str {:keys [episodes date zone]} :- DayEpisodeGroup]
+  (datapoint/mobility-datapoint user device "segments"
+                                date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
+                                {:episodes episodes})
+
   )
-(defn summarize [user device date zone daily-episodes step-supported?]
-  (let []
-    (datapoint/summary-datapoint
-      {:user                           user
-       :device                         device
-       :date                           date
-       :creation-datetime              (or (:end (last daily-episodes)) (temporal/to-last-millis-of-day date zone))
-       :geodiameter-in-km              (geodiameter daily-episodes)
-       :walking-distance-in-km         (walking-distance-in-km daily-episodes)
-       :longest-trek-in-km             (longest-trek-in-km daily-episodes)
-       :active-time-in-seconds         (active-time-in-seconds daily-episodes)
-       :steps                          (if step-supported? (total-step-count daily-episodes))
-       :gait-speed-in-meter-per-second (gait-speed daily-episodes)
-       :leave-return-home              (infer-home daily-episodes)
-       :coverage                       (algorithms/coverage date zone daily-episodes)
-       }
+
+(s/defn summarize [user :- s/Str device :- s/Str step-supported? :- s/Bool {:keys [episodes date zone]} :- DayEpisodeGroup]
+  (datapoint/mobility-datapoint
+    user device "summary"
+    date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
+    (merge (infer-home episodes)
+           {:geodiameter_in_km                  (geodiameter episodes)
+            :walking_distance_in_km             (walking-distance-in-km episodes)
+            :active_time_in_seconds             (active-time-in-seconds episodes)
+            :steps                              (if step-supported? (total-step-count episodes))
+            :max_gait_speed_in_meter_per_second (gait-speed episodes)
+            :gait_speed                         {:n_meters   (:n-meters-of-gait-speed @config)
+                                                 :quantile   (:quantile-of-gait-speed @config)
+                                                 :gait_speed (gait-speed episodes)
+                                                 }
+            :longest-trek-in-km                 (longest-trek-in-km episodes)
+            :coverage                           (algorithms/coverage date zone episodes)
+            :episodes                           (map #(dissoc % :raw-data :trace-data) episodes)
+            })
+  ))
+
+
+(defn get-datapoints [user device step-supported? episodes]
+  (let [episodes (-> episodes
+                     (assoc-cluster 50 20)
+                     (merge-still-epidoses))
+        home-clusters (infer-home-clusters episodes)
+        episodes (map #(cond-> %
+                               (home-clusters (:cluster %))
+                               (assoc :home? true)) episodes)
+        ]
+    (mapcat
+      (fn [day-group]
+        [(summarize user device step-supported? day-group)
+         (segments user device day-group)
+         ]
+        )
+      (group-by-day episodes)
       )
+
     )
   )

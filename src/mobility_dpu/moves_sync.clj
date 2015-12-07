@@ -11,6 +11,8 @@
         [aprint.core])
   (:import (org.joda.time LocalDate DateTimeZone DateTime)
            (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
+
+
 (def request-throttle (let [t1 (throttle/create-throttle! (t/hours 1) 1400)
                             t2 (throttle/create-throttle! (t/minutes 1) 50)]
                         (fn [f]
@@ -36,9 +38,11 @@
    (s/optional-key :startTime)   MovesTimestemp,
    (s/optional-key :endTime)     MovesTimestemp,
    (s/optional-key :steps)        s/Num,
+   ; the distance in meters
    (s/optional-key :distance)    s/Num
    (s/optional-key :calories) s/Num
    :trackPoints [MovesTrackPoint],
+   ; the duration in seconds
    :duration    s/Num,
    :manual      s/Bool,
    :activity    s/Str
@@ -139,7 +143,7 @@
               )
             ))
   ([user start til zone]
-    (println user start til zone)
+
    (let [end (t/plus start (t/days 6))
          end (if (t/after? end til) til end)
          response (request-throttle #(client/get storyline-endpoint {:query-params     {"username"  user
@@ -178,7 +182,7 @@
         ]
     (cond->
       episode
-      distance (assoc :distance distance)
+      distance (assoc :distance (/ distance 1000.0))
       calories (assoc :calories calories)
       duration (assoc :duration duration)
       ))
@@ -209,7 +213,7 @@
              )
 
 
-(s/defn ^:always-validate extract-episodes :- (s/maybe [EpisodeSchema])
+(s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
   [user :- s/Str]
   (if ((into #{} (get-auths user)) "moves")
     (->> (daily-storyline-sequence user)
@@ -220,6 +224,18 @@
          (map (comp last second))
          (sort-by :start)
          ))
+  )
+
+(defrecord MovesUserDatasource [user]
+  UserDataSourceProtocol
+  (source-name [_] "Moves")
+  (extract-episodes [_]
+    (moves-extract-episodes user))
+  (step-supported? [_]
+    true)
+  (last-update [_]
+    nil
+    )
   )
 
 

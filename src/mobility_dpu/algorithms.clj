@@ -103,31 +103,13 @@
   [locations :- [Location]]
   (apply max 0 (for [l1 locations
                      l2 locations]
-                 (spatial/haversine l1 l2)
+                 (if (= l1 l2)
+                   0
+                   (spatial/haversine l1 l2))
                  ))
   )
 
 
-(comment (defn max-gait-speed
-           "Return the 90% quatile walking speed without considering the spurious samples of which the speed is over 4 m/s"
-           [episodes]
-           (let [episodes (->> episodes
-                               (filter #(= :on_foot (state %)))
-                               (filter #(> (count (location-trace %)) 1))
-                               )
-                 episode-speeds
-                 (for [episode episodes]
-                   (let [filtered-trace (spatial/kalman-filter (location-trace episode) 2 30000)]
-                     (map #(speed %) (partition 2 1 filtered-trace))
-                     )
-                   )
-                 speeds (filter #(< % 4) (apply concat episode-speeds))
-                 ]
-             (if (seq speeds)
-               (nth (sort speeds) (int (* 0.9 (count speeds))))
-               0)
-             )
-           ))
 
 (defn- n-meter-gait-speed-from-head
   "Return the speed (m/s) of the trace starting from the head of the location sequence until the accumulative

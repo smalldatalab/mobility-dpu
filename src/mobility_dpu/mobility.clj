@@ -6,18 +6,13 @@
             [mobility-dpu.summary]
             monger.joda-time
             [clj-time.core :as t]
-            [clj-time.coerce :as c]
-            [mobility-dpu.temporal :as temporal]
-            [mobility-dpu.summary :as summary]
-
-            [mobility-dpu.spatial :as spatial]
             [schema.core :as s])
   (:use [aprint.core]
         [mobility-dpu.protocols]
         [mobility-dpu.process-episode])
   (:import
-    (mobility_dpu.protocols Episode LocationSample StepSample)
-    (org.joda.time DateTime)))
+    (mobility_dpu.protocols LocationSample StepSample)
+    ))
 
 (timbre/refer-timbre)
 
@@ -27,7 +22,6 @@
 
 
 (def init-state-prob {:still 0.91 :on_foot 0.03 :in_vehicle 0.03 :on_bicycle 0.03})
-(def states (keys init-state-prob))
 (def init-transition-matrix {[:still :still]      0.9 [:on_foot :on_foot] 0.9 [:in_vehicle :in_vehicle] 0.9 [:on_bicycle :on_bicycle] 0.9
                              [:still :on_foot]    0.09 [:still :in_vehicle] 0.005 [:still :on_bicycle] 0.005
                              [:on_foot :still]    0.06 [:on_foot :in_vehicle] 0.02 [:on_foot :on_bicycle] 0.02
@@ -130,12 +124,15 @@
 
 
 (s/defn extract-episodes :- [EpisodeSchema]
-  [datasource :- (s/protocol UserDataSourceProtocol)]
+  [activity-samples :- [(s/protocol ActivitySampleProtocol)]
+   location-samples :- [LocationSample]
+   steps-samples :- [StepSample]
+   ]
   "Extract episodes from the given data source."
 
-  (let [act-seq (sort-by timestamp (s/validate [(s/protocol ActivitySampleProtocol)] (activity-samples datasource)))
-        loc-seq (sort-by timestamp (s/validate [LocationSample] (location-samples datasource)))
-        step-seq (sort-by timestamp (s/validate [StepSample] (steps-samples datasource)) )
+  (let [act-seq (sort-by timestamp activity-samples)
+        loc-seq (sort-by timestamp location-samples)
+        step-seq (sort-by timestamp steps-samples )
         ; remove the location samples that have low accuracy
         loc-seq (filter #(< (:accuracy %) 75) loc-seq)
         ; downsampling
@@ -195,34 +192,8 @@
   )
 
 
-(defn get-datapoints [user data-source]
-  (let [source (source-name data-source)
-        episodes (-> (extract-episodes data-source)
-                     (assoc-cluster 50 20)
-                     (merge-still-epidoses))
-        home-clusters (infer-home-clusters episodes)
-        episodes (map #(cond-> %
-                               (home-clusters (:cluster %))
-                               (assoc :home? true)) episodes)
-        ]
-    (apply concat
-           (for [{:keys [date zone episodes]} (group-by-day episodes)]
-             [(summary/summarize user source date zone episodes (step-supported? data-source))
-              (summary/segments user source date zone episodes)
-              ]
-             ))
-    )
-  )
 
 
-(use 'mobility-dpu.database)
-(use 'mobility-dpu.android)
-(def epis (-> (extract-episodes
-                (->AndroidUserDatasource
-                  "google:108274213374340954232"
-                  (mongodb "omh" "dataPoint")))
-              (assoc-cluster 50 20)
-              (merge-still-epidoses)))
 
 
 

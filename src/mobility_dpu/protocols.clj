@@ -28,6 +28,35 @@
     :hourly-distribution [[(s/one s/Int "hour") (s/one s/Num "number of hours")]]
     ))
 
+(def EpisodeSchema
+  {:inferred-state State
+   :start (s/protocol t/DateTimeProtocol)
+   :end (s/protocol t/DateTimeProtocol)
+   :trace-data TraceData
+   (s/optional-key :cluster) Cluster
+   (s/optional-key :home?) s/Bool
+   ; distance in KM
+   (s/optional-key :distance) s/Num
+   (s/optional-key :calories) s/Num
+   ; distance in seconds
+   (s/optional-key :duration) s/Num
+
+   (s/optional-key :raw-data) s/Any
+   })
+
+(def DayEpisodeGroup
+  {:date     LocalDate
+   :zone     DateTimeZone
+   :episodes [EpisodeSchema]})
+
+
+
+
+
+
+
+
+
 (defprotocol TimestampedProtocol
   (timestamp [this]))
 
@@ -73,24 +102,6 @@
                       trace-data :- TraceData])
 
 
-(def EpisodeSchema
-  {:inferred-state State
-   :start (s/protocol t/DateTimeProtocol)
-   :end (s/protocol t/DateTimeProtocol)
-   :trace-data TraceData
-   (s/optional-key :cluster) Cluster
-   (s/optional-key :home?) s/Bool
-   (s/optional-key :distance) s/Num
-   (s/optional-key :calories) s/Num
-   (s/optional-key :duration) s/Num
-
-   (s/optional-key :raw-data) s/Any
-   })
-
-(def DayEpisodeGroup
-  {:date     LocalDate
-   :zone     DateTimeZone
-   :episodes [EpisodeSchema]})
 
 
 (defmulti trim (fn [main _ _]
@@ -149,6 +160,8 @@
 (defprotocol DatabaseProtocol
   (query [this schema-namespace schema-name user]
     "query data point of specific schema and user")
+  (last-time [this schema-namespace schema-name user]
+    "query data point of specific schema and user")
   (save [this data]
     "Save the data point. Replace the existing data point with the same id.")
   (users [this]
@@ -158,11 +171,9 @@
 
 (defprotocol UserDataSourceProtocol
   (source-name [this] "Return the name of the data source")
-  (activity-samples [this] "Return a list of all the raw activity samples")
-  (location-samples [this] "Return a list of all the raw location samples")
-  (steps-samples [this] "Return a list of all the step count samples")
   (step-supported? [this] "If the data source support the steps count")
-  (raw-data [this] "Return all the raw data points. (it is mainly used to check if there are any new data)")
+  (extract-episodes [this])
+  (last-update [this] "Return the last update time")
   )
 
 

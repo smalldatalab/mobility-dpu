@@ -1,7 +1,9 @@
 (ns mobility-dpu.android
   (:require [mobility-dpu.temporal :refer [dt-parser]]
             [schema.core :as s]
-            [clj-time.core :as t])
+            [clj-time.core :as t]
+            [mobility-dpu.mobility :as mobility]
+            [clj-time.coerce :as c])
   (:use [mobility-dpu.protocols])
   (:import (mobility_dpu.protocols LocationSample)
            (org.joda.time DateTime)))
@@ -42,43 +44,53 @@
 (defrecord AndroidUserDatasource [user db]
   UserDataSourceProtocol
   (source-name [_] "Android")
-  (activity-samples [_]
-    (s/validate
-      [AndroidActivitySample]
-      (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
-                              (query db "omh" "mobility" user)) ; old Mobility data
-            ]
-        (AndroidActivitySample.
-          (timestamp datapoint)
-          (datapoint->activity-prob-map datapoint)
-          )
-        ))
-    )
-  (location-samples [_]
-    (s/validate
-      [LocationSample]
-      (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-location-stream" user)
-                              (query db "omh" "location" user))]
-        (LocationSample. (if-let [more-accurate-time (:timestamp (:body datapoint))]
-                           (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
-                           (timestamp datapoint))
-                         (:latitude (:body datapoint))
-                         (:longitude (:body datapoint))
-                         (:accuracy (:body datapoint)))
-        )
+  (extract-episodes [_]
+    (let [activity-samples (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
+                                                   (query db "omh" "mobility" user)) ; old Mobility data
+                                 ]
+                             (AndroidActivitySample.
+                               (timestamp datapoint)
+                               (datapoint->activity-prob-map datapoint)
+                               )
+                             )
+          location-samples (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-location-stream" user)
+                                                   (query db "omh" "location" user))]
+                             (LocationSample. (if-let [more-accurate-time (:timestamp (:body datapoint))]
+                                                (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
+                                                (timestamp datapoint))
+                                              (:latitude (:body datapoint))
+                                              (:longitude (:body datapoint))
+                                              (:accuracy (:body datapoint)))
+                             )
+          ]
+      (mobility/extract-episodes activity-samples location-samples nil)
       )
     )
+
   ; Android does not support steps count
-  (steps-samples [_]
-    nil)
+
   (step-supported? [_]
     false)
-  (raw-data [_]
-    (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
-            (query db "omh" "mobility" user)
-            (query db "io.smalldatalab" "mobility-android-location-stream" user)
-            (query db "omh" "location" user)
-            )
+  (last-update [_]
+    (let [times (->>
+                  [(last-time db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
+                   (last-time db "omh" "mobility" user)
+                   (last-time db "io.smalldatalab" "mobility-android-location-stream" user)
+                   (last-time db "omh" "location" user)]
+                   (filter identity)
+                  )
+
+          ]
+      (if (seq times)
+        (->> times
+             (map c/to-long)
+             (apply max)
+             (c/from-long)
+             )
+
+        )
+      )
+
     )
   )
 

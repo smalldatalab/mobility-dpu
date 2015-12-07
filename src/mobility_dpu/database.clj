@@ -31,6 +31,21 @@
             (mobility-dpu.temporal/dt-parser
               (get-in row [:header :creation_date_time])))
           ))
+      (last-time [_ ns name user]
+        (let [row (->> (mq/with-collection db coll
+                                           (mq/find {"header.schema_id.name"      name
+                                                     "header.schema_id.namespace" ns
+                                                     :user_id                     user})
+                                           (mq/keywordize-fields true)
+                                           (mq/sort {"header.creation_date_time_epoch_milli" -1})
+                                           (mq/limit 1)
+                                           )
+                       (first)
+                       )]
+          (if row (mobility-dpu.temporal/dt-parser
+                    (get-in row [:header :creation_date_time])))
+          )
+        )
       (save [_ data]
         (mc/save db coll data)
         )

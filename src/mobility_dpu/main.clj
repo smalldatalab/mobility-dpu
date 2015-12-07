@@ -11,7 +11,7 @@
             )
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android]
-        [mobility-dpu.ios]
+    ; [mobility-dpu.ios]
         [mobility-dpu.database]
         [mobility-dpu.config]
         [aprint.core]
@@ -104,5 +104,25 @@
 
 
 
+
+
+
+  (use 'mobility-dpu.database :reload)
+  (use 'mobility-dpu.android :reload)
+
+
+
+  (def dps
+    (let [source (->AndroidUserDatasource
+                   "google:108274213374340954232"
+                   (mongodb "omh" "dataPoint"))]
+
+      (mobility-dpu.summary/get-datapoints
+        "google:108274213374340954232"
+        (source-name source)
+        (step-supported? source)
+        (extract-episodes source))
+      )
+    )
 
 

@@ -62,7 +62,7 @@
 (s/defn hmm :- [State]
   "Apply Hidden Makov Model to smooth the activity samples
   See: http://en.wikipedia.org/wiki/Baum%E2%80%93Welch_algorithm"
-  [sample-seq :- [ActivitySampleProtocol]
+  [sample-seq :- [(s/protocol ActivitySampleProtocol)]
    transition-matrix
    first-x-prob]
   (if (< (count sample-seq) 2)
