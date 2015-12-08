@@ -118,7 +118,7 @@
                            )
                          )
           ]
-      (mobility/extract-episodes activity-samples location-samples step-samples)
+      (mobility/mobility-extract-episodes activity-samples location-samples step-samples)
       )
     )
 

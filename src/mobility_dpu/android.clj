@@ -63,7 +63,7 @@
                                               (:accuracy (:body datapoint)))
                              )
           ]
-      (mobility/extract-episodes activity-samples location-samples nil)
+      (mobility/mobility-extract-episodes activity-samples location-samples nil)
       )
     )
 

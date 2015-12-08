@@ -19,6 +19,37 @@
    :longitude Longitude
    s/Any s/Any})
 
+(defprotocol ActivitySampleProtocol
+  (prob-sample-given-state [this state]
+    "return P(Hidden State=s | this sample),  namely, given observing this sample, what is the probability of hidden state being s")
+  )
+
+(defprotocol TimestampedProtocol
+  (timestamp [this]))
+
+(s/defrecord LocationSample [timestamp :- (s/protocol t/DateTimeProtocol)
+                             latitude :- Latitude
+                             longitude :- Longitude
+                             accuracy :- (s/maybe Accuracy)]
+  TimestampedProtocol
+  (timestamp [_] "The time when the location smaple is colleted" timestamp)
+  )
+
+(s/defrecord StepSample[start :- (s/protocol t/DateTimeProtocol)
+                        end :- (s/protocol t/DateTimeProtocol)
+                        step-count :- (s/pred #(>= % 0))]
+  TimestampedProtocol
+  (timestamp [_] "The time when the step smaple is colleted" start)
+  )
+
+
+(s/defrecord TraceData [activity-trace :- [(s/protocol ActivitySampleProtocol)]
+                        location-trace :- [LocationSample]
+                        step-trace :- [StepSample]])
+
+
+
+
 (def Cluster
   (assoc Location
     :first-time (s/protocol t/DateTimeProtocol)
@@ -27,6 +58,8 @@
     :number-days s/Int
     :hourly-distribution [[(s/one s/Int "hour") (s/one s/Num "number of hours")]]
     ))
+
+
 
 (def EpisodeSchema
   {:inferred-state State
@@ -57,43 +90,17 @@
 
 
 
-(defprotocol TimestampedProtocol
-  (timestamp [this]))
-
 
 (defrecord DataPointRecord [body timestamp]
   TimestampedProtocol
   (timestamp [_] timestamp)
   )
 
-(defprotocol ActivitySampleProtocol
-  (prob-sample-given-state [this state]
-    "return P(Hidden State=s | this sample),  namely, given observing this sample, what is the probability of hidden state being s")
-  )
 
 
 
 
 
-(s/defrecord LocationSample [timestamp :- (s/protocol t/DateTimeProtocol)
-                           latitude :- Latitude
-                           longitude :- Longitude
-                           accuracy :- (s/maybe Accuracy)]
-  TimestampedProtocol
-  (timestamp [_] "The time when the location smaple is colleted" timestamp)
-  )
-
-(s/defrecord StepSample[start :- (s/protocol t/DateTimeProtocol)
-                       end :- (s/protocol t/DateTimeProtocol)
-                       step-count :- (s/pred #(>= % 0))]
-  TimestampedProtocol
-  (timestamp [_] "The time when the step smaple is colleted" start)
-  )
-
-
-(s/defrecord TraceData [activity-trace :- [(s/protocol ActivitySampleProtocol)]
-                        location-trace :- [LocationSample]
-                        step-trace :- [StepSample]])
 
 
 (s/defrecord Episode [inferred-state :- State

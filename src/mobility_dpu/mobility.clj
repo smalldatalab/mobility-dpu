@@ -123,7 +123,7 @@
 
 
 
-(s/defn extract-episodes :- [EpisodeSchema]
+(s/defn mobility-extract-episodes :- [EpisodeSchema]
   [activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
    steps-samples :- [StepSample]

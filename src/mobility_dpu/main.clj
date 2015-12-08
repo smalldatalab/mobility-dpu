@@ -1,24 +1,17 @@
 (ns mobility-dpu.main
   (:gen-class)
-  (:require [mobility-dpu.ios]
-            [taoensso.timbre :as timbre]
+  (:require [taoensso.timbre :as timbre]
             [taoensso.timbre.appenders.core :as appenders]
-            [mobility-dpu.android]
-            [mobility-dpu.mobility :as mobility]
             [mobility-dpu.temporal :refer [dt-parser]]
             [mobility-dpu.moves-sync :as moves]
             [mobility-dpu.shims-sync :as shims]
             )
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android]
-    ; [mobility-dpu.ios]
+        [mobility-dpu.ios]
         [mobility-dpu.database]
         [mobility-dpu.config]
-        [aprint.core]
-
-        )
-
-  )
+        [aprint.core]))
 
 ; config logger
 (timbre/refer-timbre)
