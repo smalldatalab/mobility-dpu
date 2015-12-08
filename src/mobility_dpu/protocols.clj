@@ -177,6 +177,7 @@
 
 
 (defprotocol UserDataSourceProtocol
+  (user [this] "Return the user name")
   (source-name [this] "Return the name of the data source")
   (step-supported? [this] "If the data source support the steps count")
   (extract-episodes [this])

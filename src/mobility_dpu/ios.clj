@@ -50,6 +50,7 @@
 (defrecord iOSUserDatasource [user db]
   UserDataSourceProtocol
   (source-name [_] "iOS")
+  (user [_] user)
   (extract-episodes [_]
     (let [activity-samples (let [dp->sample
                                  (fn [dp] "convert a raw data point dp to activity sample record"

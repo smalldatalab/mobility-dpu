@@ -132,7 +132,7 @@
     )
   )
 
-(s/defn  ^:always-validate daily-storyline-sequence :- (s/maybe [MovesData])
+(s/defn   daily-storyline-sequence :- [MovesData]
   "Query the storylines from the moves until the current date in the user's timezone"
   ([user] (let [{:keys [first-date current-zone] :as response} (get-profile user)]
             (if response
@@ -152,8 +152,11 @@
                                                                      :as               :json
                                                                      :throw-exceptions false
                                                                      }))
-         storylines (get-in response [:body :body])
-         storylines (map #(assoc % :zone zone) storylines)
+         storylines (->> (get-in response [:body :body])
+                         (map #(assoc % :zone zone))
+                         (s/validate [MovesData])
+                         )
+
          ]
      (if (= end til)
        storylines
@@ -229,6 +232,7 @@
 (defrecord MovesUserDatasource [user]
   UserDataSourceProtocol
   (source-name [_] "Moves")
+  (user [_] user)
   (extract-episodes [_]
     (moves-extract-episodes user))
   (step-supported? [_]

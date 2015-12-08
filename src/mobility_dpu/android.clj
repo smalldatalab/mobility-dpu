@@ -44,6 +44,7 @@
 (defrecord AndroidUserDatasource [user db]
   UserDataSourceProtocol
   (source-name [_] "Android")
+  (user [_] user)
   (extract-episodes [_]
     (let [activity-samples (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
                                                    (query db "omh" "mobility" user)) ; old Mobility data

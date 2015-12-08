@@ -7,7 +7,7 @@
 
             )
   (:use [mobility-dpu.protocols])
-  )
+  (:import (org.joda.time DateTime)))
 
 
 
@@ -147,7 +147,7 @@
         )
 
 
-(s/defn ^:always-validate merge-still-epidoses :- [EpisodeSchema]
+(s/defn merge-still-epidoses :- [EpisodeSchema]
   "Merge the consecutive episodes that are
   1) both of still state
   2) the gap between them is less than 60 miniutes,
@@ -173,8 +173,8 @@
   (->> (group-by (comp c/to-local-date :start) episodes)
        (map (fn [[date epis]]
               (let [first-epi (first (sort-by :start epis))
-                    zone (.getZone (:start first-epi))
-                    start (.withTimeAtStartOfDay (:start first-epi))
+                    zone (.getZone ^DateTime (:start first-epi))
+                    start (.withTimeAtStartOfDay ^DateTime (:start first-epi))
                     interval (t/interval start
                                          (t/minus (t/plus start (t/days 1)) (t/millis 1)))]
                 {:date     date
@@ -191,12 +191,11 @@
               ))
        (sort-by :date)
        )
-
   )
 
 (s/defn ^:always-validate infer-home-clusters :- #{Cluster}
   [episodes :- [EpisodeSchema]]
-  "Determin the clusters that are home locations (i.e. the location the user leaves from at morning and comes back to at night)"
+  "Determine the clusters that are home locations (i.e. the location the user leaves from at morning and comes back to at night)"
   (->>
     (group-by-day episodes)
     (map :episodes)

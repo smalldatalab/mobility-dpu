@@ -119,8 +119,11 @@
   ))
 
 
-(defn get-datapoints [user device step-supported? episodes]
-  (let [episodes (-> episodes
+(defn get-datapoints [source]
+  (let [user (user source)
+        device (source-name source)
+        step-supported? (step-supported? source)
+        episodes (-> (extract-episodes source)
                      (assoc-cluster 50 20)
                      (merge-still-epidoses))
         home-clusters (infer-home-clusters episodes)
