@@ -90,7 +90,7 @@
   {:header
             {:acquisition_provenance         {:modality #"SENSED", :source_name s/Str}
              :creation_date_time_epoch_milli s/Int,
-             :creation_date_time             (s/pred #(= % (c/to-string (c/from-string %))))
+             :creation_date_time             (s/pred #(c/from-string %) "valid datetime")
              :schema_id                      {:version   {:minor s/Int, :major s/Int},
                                               :name      s/Str
                                               :namespace s/Str}
@@ -108,17 +108,21 @@
      :active_time_in_seconds             s/Num,
      :walking_distance_in_km             s/Num,
      :date                               #"\d{4}-\d\d-\d\d",
+     :device                             s/Str
      :max_gait_speed_in_meter_per_second (s/maybe s/Num),
      :gait_speed                         {:gait_speed (s/maybe s/Num), :quantile s/Num, :n_meters s/Num}
      :geodiameter_in_km                  s/Num,
      :steps                              (s/maybe s/Num),
      :coverage                           s/Num,
-     :episodes                           [(dissoc EpisodeSchema :raw-data :trace-data)]})
+     :episodes                           [s/Any]})
   )
 (def SegmentDataPoint
   (assoc DataPoint
     :body
-    {:episodes [EpisodeSchema]})
+    {:episodes [s/Any]
+     :date     #"\d{4}-\d\d-\d\d"
+     :device   s/Str
+     })
   )
 
 (def MobilityDataPoint

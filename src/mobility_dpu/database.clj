@@ -7,13 +7,12 @@
             [schema.core :as s])
   (:use [mobility-dpu.config]
         [mobility-dpu.protocols])
-  (:import (mobility_dpu.protocols DatabaseProtocol DataPointRecord)))
+  )
 
 
 
 
 
-(def validator (s/validator DataPoint))
 (defn mongodb
   "Create a MongoDB-backed DatabaseProtocol"
   [db coll]
@@ -28,7 +27,7 @@
                                       (mq/keywordize-fields true)
                                       (mq/sort {"header.creation_date_time_epoch_milli" 1})
                                       )]
-          (DataPointRecord.
+          (->DataPointRecord
             (:body row)
             (mobility-dpu.temporal/dt-parser
               (get-in row [:header :creation_date_time])))
@@ -49,7 +48,7 @@
           )
         )
       (save [_ data]
-        (mc/save db coll (validator data))
+        (mc/save db coll data)
         )
       (users [_] (mc/distinct db "endUser" "_id" {}))
       ))

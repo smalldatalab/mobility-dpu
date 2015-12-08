@@ -11,7 +11,7 @@
 
 
 
-(s/defn ^:always-validate assoc-cluster :- [EpisodeSchema]
+(s/defn assoc-cluster :- [EpisodeSchema]
         "Associate (still) episodes with their corresponding cluster assignments based on a time-based DBSCAN with the given
         epsMeters and minMinutes.
         EpsMeters is the distance threshold for neighbor points.
@@ -166,7 +166,7 @@
   )
 
 
-(s/defn ^:always-validate group-by-day :- [DayEpisodeGroup]
+(s/defn group-by-day :- [DayEpisodeGroup]
   [episodes :- [EpisodeSchema]]
   "Group epidsodes by days. In the case where a segment belongs to mutiple groups (i.e. spanning multiple days),
    it will be included in the both groups with start/end time trimed to the corresponding days"
@@ -193,7 +193,7 @@
        )
   )
 
-(s/defn ^:always-validate infer-home-clusters :- #{Cluster}
+(s/defn infer-home-clusters :- #{Cluster}
   [episodes :- [EpisodeSchema]]
   "Determine the clusters that are home locations (i.e. the location the user leaves from at morning and comes back to at night)"
   (->>

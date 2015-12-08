@@ -91,7 +91,8 @@
 
   )
 
-(s/defn mobility-datapoint :- MobilityDataPoint [user device type date creation-datetime body]
+(s/defn mobility-datapoint :- MobilityDataPoint
+  [user device type date creation-datetime body]
   (datapoint/datapoint user
              "cornell"                                      ; namespace
              (str "mobility-daily-" type)                   ; schema name
@@ -106,14 +107,22 @@
   )
 
 
-(s/defn segments [user :- s/Str device :- s/Str {:keys [episodes date zone]} :- DayEpisodeGroup]
-  (mobility-datapoint user device "segments"
-                                date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
-                                {:episodes episodes})
+(s/defn segments :- SegmentDataPoint
+  [user :- s/Str
+   device :- s/Str
+   {:keys [episodes date zone]} :- DayEpisodeGroup]
+  (mobility-datapoint
+    user device "segments"
+    date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
+    {:episodes episodes})
 
   )
 
-(s/defn summarize [user :- s/Str device :- s/Str step-supported? :- s/Bool {:keys [episodes date zone]} :- DayEpisodeGroup]
+(s/defn summarize :- SummaryDataPoint
+  [user :- s/Str
+   device :- s/Str
+   step-supported? :- s/Bool
+   {:keys [episodes date zone]} :- DayEpisodeGroup]
   (mobility-datapoint
     user device "summary"
     date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
@@ -138,13 +147,16 @@
   (let [user (user source)
         device (source-name source)
         step-supported? (step-supported? source)
+        ; extract episodes from raw data
         episodes (-> (extract-episodes source)
+                     ;
                      (assoc-cluster 50 20)
                      (merge-still-epidoses))
         home-clusters (infer-home-clusters episodes)
-        episodes (map #(cond-> %
-                               (home-clusters (:cluster %))
-                               (assoc :home? true)) episodes)
+        episodes (map #(cond->
+                        %
+                        (home-clusters (:cluster %))
+                        (assoc :home? true)) episodes)
         ]
     (mapcat
       (fn [day-group]
