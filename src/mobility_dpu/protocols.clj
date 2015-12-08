@@ -1,7 +1,8 @@
 (ns
   mobility-dpu.protocols
   (:require [clj-time.core :as t]
-            [schema.core :as s])
+            [schema.core :as s]
+            [clj-time.coerce :as c])
   (:import (org.joda.time LocalDate DateTimeZone)))
 
 (def State (s/enum :in_vehicle
@@ -77,12 +78,60 @@
    (s/optional-key :raw-data) s/Any
    })
 
+
+
+
 (def DayEpisodeGroup
   {:date     LocalDate
    :zone     DateTimeZone
    :episodes [EpisodeSchema]})
 
+(def DataPoint
+  {:header
+            {:acquisition_provenance         {:modality #"SENSED", :source_name s/Str}
+             :creation_date_time_epoch_milli s/Int,
+             :creation_date_time             (s/pred #(= % (c/to-string (c/from-string %))))
+             :schema_id                      {:version   {:minor s/Int, :major s/Int},
+                                              :name      s/Str
+                                              :namespace s/Str}
+             :id                             s/Str}
+   :user_id s/Str,
+   :_class  #"org.openmhealth.dsu.domain.DataPoint",
+   :_id     s/Str
+   :body    s/Any
+   })
 
+(def SummaryDataPoint
+  (assoc DataPoint
+    :body
+    {:longest-trek-in-km                 s/Num,
+     :active_time_in_seconds             s/Num,
+     :walking_distance_in_km             s/Num,
+     :date                               #"\d{4}-\d\d-\d\d",
+     :max_gait_speed_in_meter_per_second (s/maybe s/Num),
+     :gait_speed                         {:gait_speed (s/maybe s/Num), :quantile s/Num, :n_meters s/Num}
+     :geodiameter_in_km                  s/Num,
+     :steps                              (s/maybe s/Num),
+     :coverage                           s/Num,
+     :episodes                           [(dissoc EpisodeSchema :raw-data :trace-data)]})
+  )
+(def SegmentDataPoint
+  (assoc DataPoint
+    :body
+    {:episodes [EpisodeSchema]})
+  )
+
+(def MobilityDataPoint
+  (s/conditional
+    #(let [schema-name (get-in % [:header :schema_id :name])]
+      (= schema-name "mobility-daily-summary")
+      )
+    SummaryDataPoint
+    #(let [schema-name (get-in % [:header :schema_id :name])]
+      (= schema-name "mobility-daily-segments")
+      )
+    SegmentDataPoint
+    ))
 
 
 

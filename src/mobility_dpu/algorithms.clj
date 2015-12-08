@@ -17,18 +17,21 @@
 (s/defn infer-home
   "Divide the episodes sequence into 5 segemnts:
 
-  (scan from the begining)
+  first, scan from the begining.
   1) before getting home at midnight
   2) before leave home at morning
 
-  3) befor going back home
+  and then scan reversely from the end
+  3) after leaving home again at night (if ever)
+  4) after return home after 2)
 
-  (scan reversely from the end)
-  4) after going back home
-  5) after leaving home at midnight
+  5) the episode that between 2) and 4)
+
+  In the most common case, the segment 5) should be not be empty and repsent the time the person stays in the work place.
+  If the user never returns home after he left home at the morning, the segment 4) will be empty.
+  If the user return home at the midnight, and never left again, the segments 3) 4) 5) will all be empty.
   "
   [episodes :- [EpisodeSchema]]
-
   (let [place-episodes (filter #(= (:inferred-state %) :still) episodes)
         [before-get-home-at-midnight after-get-home]
         (split-with (complement :home?) place-episodes)

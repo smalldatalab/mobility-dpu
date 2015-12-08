@@ -7,7 +7,8 @@
 
     [mobility-dpu.temporal :as temporal]
     [mobility-dpu.datapoint :as datapoint]
-    [schema.core :as s])
+    [schema.core :as s]
+    [clj-time.coerce :as c])
   (:use [aprint.core]
         [mobility-dpu.config]
         [mobility-dpu.protocols]
@@ -19,8 +20,9 @@
 (timbre/refer-timbre)
 
 
-(defn- duration [%]
-  (t/interval (:start %) (:end %))
+
+(s/defn duration :- s/Num [% :- EpisodeSchema]
+  (or (:duration %) (t/in-seconds (t/interval (:start %) (:end %))))
   )
 
 
@@ -28,7 +30,6 @@
   (->> episodes
        (filter #(#{:on_foot :on_bicycle} (:inferred-state %)))
        (map duration)
-       (map t/in-seconds)
        (apply + 0)
        )
   )
@@ -47,7 +48,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(or (> (count (:location-trace (:trace-data %))) 1) (:distance %)) )
+       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1) ) )
        (map episode-distance)
        (apply + 0)
        )
@@ -58,7 +59,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(or (> (count (:location-trace (:trace-data %))) 1) (:distance %)) )
+       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1) ) )
        (map episode-distance)
        (apply max 0)
        )
@@ -90,16 +91,30 @@
 
   )
 
+(s/defn mobility-datapoint :- MobilityDataPoint [user device type date creation-datetime body]
+  (datapoint/datapoint user
+             "cornell"                                      ; namespace
+             (str "mobility-daily-" type)                   ; schema name
+             (clojure.string/lower-case device)             ; souce
+             "SENSED"                                       ; modality
+             date                                           ; time for id
+             creation-datetime                              ; creation datetime
+             (assoc body
+               :date date
+               :device (clojure.string/lower-case device))  ; body
+             )
+  )
+
 
 (s/defn segments [user :- s/Str device :- s/Str {:keys [episodes date zone]} :- DayEpisodeGroup]
-  (datapoint/mobility-datapoint user device "segments"
+  (mobility-datapoint user device "segments"
                                 date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
                                 {:episodes episodes})
 
   )
 
 (s/defn summarize [user :- s/Str device :- s/Str step-supported? :- s/Bool {:keys [episodes date zone]} :- DayEpisodeGroup]
-  (datapoint/mobility-datapoint
+  (mobility-datapoint
     user device "summary"
     date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
     (merge (infer-home episodes)
@@ -119,7 +134,7 @@
   ))
 
 
-(defn get-datapoints [source]
+(s/defn get-datapoints :- MobilityDataPoint [source :- (s/protocol UserDataSourceProtocol)]
   (let [user (user source)
         device (source-name source)
         step-supported? (step-supported? source)

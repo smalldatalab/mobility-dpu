@@ -3,15 +3,17 @@
             [monger.query :as mq]
             [monger.collection :as mc]
 
-            [mobility-dpu.temporal])
-  (:use [mobility-dpu.config])
+            [mobility-dpu.temporal]
+            [schema.core :as s])
+  (:use [mobility-dpu.config]
+        [mobility-dpu.protocols])
   (:import (mobility_dpu.protocols DatabaseProtocol DataPointRecord)))
 
 
 
 
 
-
+(def validator (s/validator DataPoint))
 (defn mongodb
   "Create a MongoDB-backed DatabaseProtocol"
   [db coll]
@@ -47,7 +49,7 @@
           )
         )
       (save [_ data]
-        (mc/save db coll data)
+        (mc/save db coll (validator data))
         )
       (users [_] (mc/distinct db "endUser" "_id" {}))
       ))

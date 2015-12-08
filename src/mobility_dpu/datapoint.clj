@@ -1,8 +1,14 @@
 (ns mobility-dpu.datapoint
-  (:require [clj-time.coerce :as c])
+  (:require [clj-time.coerce :as c]
+            [schema.core :as s])
   (:import (org.joda.time ReadableInstant ReadablePartial DateTimeZone)
            (clojure.lang IPersistentMap IPersistentCollection Keyword))
-  (:use [mobility-dpu.config]))
+  (:use [mobility-dpu.config]
+        [mobility-dpu.protocols]))
+
+
+
+
 
 (defmulti time->str class)
 (defmethod time->str IPersistentMap [m]
@@ -23,30 +29,17 @@
       {:_id     id
        :_class  "org.openmhealth.dsu.domain.DataPoint"
        :user_id user
-       :header  {"id"                             id,
-                 "schema_id"                      {"namespace" namespace,
-                                                   "name"      schema,
-                                                   "version"   {"major" 1, "minor" 0}},
-                 "creation_date_time"             creation-datetime,
-                 "creation_date_time_epoch_milli" (c/to-long creation-datetime)
-                 "acquisition_provenance"         {"source_name" source,
-                                                   "modality"    modality}},
+       :header  {:id                             id,
+                 :schema_id                      {:namespace namespace,
+                                                   :name      schema,
+                                                   :version   {:major 1, :minor 0}},
+                 :creation_date_time             creation-datetime,
+                 :creation_date_time_epoch_milli (c/to-long creation-datetime)
+                 :acquisition_provenance         {:source_name source,
+                                                  :modality    modality}},
        :body    body
        })
     )
   )
 
-(defn mobility-datapoint [user device type date creation-datetime body]
-  (datapoint user
-             "cornell"                                      ; namespace
-             (str "mobility-daily-" type)                   ; schema name
-             (clojure.string/lower-case device)             ; souce
-             "SENSED"                                       ; modality
-             date                                           ; time for id
-             creation-datetime                              ; creation datetime
-             (assoc body
-               :date date
-               :device (clojure.string/lower-case device))  ; body
-             )
-  )
 
