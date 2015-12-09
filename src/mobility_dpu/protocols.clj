@@ -107,6 +107,9 @@
     {:longest-trek-in-km                 s/Num,
      :active_time_in_seconds             s/Num,
      :walking_distance_in_km             s/Num,
+     (s/optional-key :leave_home_time)   (s/pred #(c/from-string %) "valid datetime"),
+     (s/optional-key :return_home_time)  (s/pred #(c/from-string %) "valid datetime"),
+     (s/optional-key :time_not_at_home_in_seconds) s/Num
      :date                               #"\d{4}-\d\d-\d\d",
      :device                             s/Str
      :max_gait_speed_in_meter_per_second (s/maybe s/Num),
@@ -119,9 +122,9 @@
 (def SegmentDataPoint
   (assoc DataPoint
     :body
-    {:episodes [s/Any]
-     :date     #"\d{4}-\d\d-\d\d"
+    {:date     #"\d{4}-\d\d-\d\d"
      :device   s/Str
+     :episodes [s/Any]
      })
   )
 

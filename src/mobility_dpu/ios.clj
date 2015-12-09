@@ -128,7 +128,7 @@
   (step-supported? [_]
     true)
   (last-update [_]
-    (or (last-time db "cornell" "mobility-stream-iOS" user) nil)
+    (or (last-time db "cornell" "mobility-stream-iOS" user) (c/from-long 0))
     )
   )
 

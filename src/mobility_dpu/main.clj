@@ -5,7 +5,9 @@
             [mobility-dpu.temporal :refer [dt-parser]]
             [mobility-dpu.moves-sync :as moves]
             [mobility-dpu.shims-sync :as shims]
-            )
+            [mobility-dpu.summary :as summary]
+            [clj-time.core :as t]
+            [schema.core :as s])
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android]
         [mobility-dpu.ios]
@@ -23,21 +25,7 @@
 (defn -main
   "The application's main function"
   [& args]
-  ; Create a new thread to sync moves data
-  (future
-    (loop []
-      (doseq [user (or (seq args) (users db))]
-        (try
-          (doseq [dp (moves/get-datapoints user)]
-            (info "Save data for " user " "
-                  (get-in dp [:body :date]) " "
-                  (get-in dp [:body :device]))
-            (save db dp)
-            )
-          (catch Exception e (error e)))
-        )
-      (recur))
-    )
+
   ; Create a new thread to sync other shims sync tasks
   (future
     (loop []
@@ -64,24 +52,33 @@
     )
 
 
-  ; sync Android and iOS mobility
-  (let [user-raw-data-counts (atom {})]
+  ; sync Android and iOS mobility and Moves
+  (let [user-source->last-update (atom {})]
     (loop []
       (doseq [; run dpu for specifc users (if args are set) or all the users in the db
               user (or (seq args) (users db))
               ; functions to generate datapoints from different sources: Android, iOS, and Moves App
-              source-fn [->AndroidUserDatasource ->iOSUserDatasource]]
-        (let [source (source-fn user db)
-              raw-data-count (count (raw-data source))]
+              source-fn [#(->AndroidUserDatasource % db)
+                         #(->iOSUserDatasource % db)
+                         #(->MovesUserDatasource %)]]
+        (let [source (source-fn user)
+              last-raw-data-update-time (last-update source)
+              last-process-time (@user-source->last-update  [user source-fn])]
           ; only compute new data points if there are new raw data that have been uploaded
-          (if-not (= raw-data-count (get @user-raw-data-counts [user source-fn]))
-            (try (doseq [datapoint (mobility/get-datapoints user (source-fn user db))]
+          (if
+            (or (nil? last-raw-data-update-time)
+                (nil? last-process-time)
+                (t/after? last-raw-data-update-time last-process-time)
+                )
+
+
+            (try (doseq [datapoint (summary/get-datapoints (source-fn user))]
                    (info "Save data for " user " "
                          (get-in datapoint [:body :date]) " "
                          (get-in datapoint [:body :device]))
-                   (save db datapoint))
+                   (save db (s/validate MobilityDataPoint datapoint)))
                  ; store number of raw data counts to check data update in the future
-                 (swap! user-raw-data-counts assoc [user source-fn] raw-data-count)
+                 (swap! user-source->last-update assoc [user source-fn] last-raw-data-update-time)
                  (catch Exception e (error e)))
             (info "No new data for " user)
             )
@@ -98,9 +95,9 @@
 
 
   (def dps
-    (let [source (->AndroidUserDatasource
+    (let [source (->MovesUserDatasource
                    "google:108274213374340954232"
-                   (mongodb "omh" "dataPoint"))]
+                   )]
       (mobility-dpu.summary/get-datapoints source)
       )
     )

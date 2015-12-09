@@ -194,26 +194,27 @@
 (defmulti segment->episodes :type)
 
 (s/defmethod ^:always-validate segment->episodes "place" :- [EpisodeSchema]
-             [{:keys [startTime endTime place activities] :as raw-data} :- PlaceSegment]
-             (let [startTime (DateTime/parse startTime date-time-format)
+
+   [{:keys [startTime endTime place activities] :as raw-data} :- PlaceSegment]
+     (let [startTime (DateTime/parse startTime date-time-format)
        endTime (DateTime/parse endTime date-time-format)
        {:keys [lon lat]} (:location place)
        trace (->TraceData [] [(->LocationSample startTime lat lon location-sample-accuracy)
                               (->LocationSample endTime lat lon location-sample-accuracy)
                               ] [])]
    (cons (assoc (->Episode :still startTime endTime trace) :raw-data raw-data)
-         (map activity->episode activities)))
+         (->>
+           activities
+           (filter #(and (:group %) (:startTime %) (:endTime %)))
+           (map activity->episode))))
              )
 
 (s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
-             [{:keys [activities]} :- MovingSegment]
-             (->>
-     activities
-     (filter #(and (:group %) (:startTime %) (:endTime %)))
-     (map activity->episode))
-
-
-             )
+   [{:keys [activities]} :- MovingSegment]
+     (->>
+        activities
+        (filter #(and (:group %) (:startTime %) (:endTime %)))
+        (map activity->episode)))
 
 
 (s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])

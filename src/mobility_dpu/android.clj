@@ -88,7 +88,7 @@
              (apply max)
              (c/from-long)
              )
-
+        (c/from-long 0)
         )
       )
 
