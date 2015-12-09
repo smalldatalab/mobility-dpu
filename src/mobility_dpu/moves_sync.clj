@@ -58,6 +58,7 @@
                 :location {:lat s/Num, :lon s/Num}
                 (s/optional-key :id) s/Num,
                 (s/optional-key :foursquareId) s/Str
+                (s/optional-key :facebookPlaceId) s/Str
                 (s/optional-key :foursquareCategoryIds) [s/Str]
                 (s/optional-key :name) s/Str
                 },
@@ -212,16 +213,16 @@
                               (->LocationSample endTime lat lon location-sample-accuracy)
                               ] [])]
    (cons (assoc (->Episode :still startTime endTime trace) :raw-data raw-data)
-         (activity->episode activities)))
+         (activities->episodes activities)))
              )
 
 (s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
    [{:keys [activities]} :- MovingSegment]
-             (activity->episode activities))
+             (activities->episodes activities))
 
 (s/defmethod ^:always-validate segment->episodes "off" :- [EpisodeSchema]
              [{:keys [activities]} :- MovingSegment]
-             (activity->episode activities))
+             (activities->episodes activities))
 
 
 (s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
