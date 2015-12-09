@@ -195,7 +195,7 @@
 
 (defmulti segment->episodes :type)
 
-(s/defn activities->episodes [EpisodeSchema]
+(s/defn activities->episodes :- [EpisodeSchema]
   [activities :- [MovesActivity]]
   (->>
     activities
