@@ -65,7 +65,7 @@
    :lastUpdate MovesTimestemp})
 
 (def MovingSegment
-  {:type #"move",
+  {:type (s/enum "move" "off"),
    :startTime  MovesTimestemp,
    :endTime    MovesTimestemp,
    (s/optional-key :activities) [MovesActivity],
@@ -74,6 +74,8 @@
 (def Segment
   (s/conditional
     #(= (:type %) "move")
+    MovingSegment
+    #(= (:type %) "off")
     MovingSegment
     #(= (:type %) "place")
     PlaceSegment
@@ -193,6 +195,13 @@
 
 (defmulti segment->episodes :type)
 
+(s/defn activities->episodes [EpisodeSchema]
+  [activities :- [MovesActivity]]
+  (->>
+    activities
+    (filter #(and (:group %) (:startTime %) (:endTime %)))
+    (map activity->episode))
+  )
 (s/defmethod ^:always-validate segment->episodes "place" :- [EpisodeSchema]
 
    [{:keys [startTime endTime place activities] :as raw-data} :- PlaceSegment]
@@ -203,18 +212,16 @@
                               (->LocationSample endTime lat lon location-sample-accuracy)
                               ] [])]
    (cons (assoc (->Episode :still startTime endTime trace) :raw-data raw-data)
-         (->>
-           activities
-           (filter #(and (:group %) (:startTime %) (:endTime %)))
-           (map activity->episode))))
+         (activity->episode activities)))
              )
 
 (s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
    [{:keys [activities]} :- MovingSegment]
-     (->>
-        activities
-        (filter #(and (:group %) (:startTime %) (:endTime %)))
-        (map activity->episode)))
+             (activity->episode activities))
+
+(s/defmethod ^:always-validate segment->episodes "off" :- [EpisodeSchema]
+             [{:keys [activities]} :- MovingSegment]
+             (activity->episode activities))
 
 
 (s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
