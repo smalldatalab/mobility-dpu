@@ -24,7 +24,8 @@
 (defmethod time->str :default [m] m)
 
 (defn datapoint [user namespace schema source modality time-for-id creation-datetime body]
-  (let [id (str schema "-" user "-" time-for-id "-" (clojure.string/lower-case source))]
+  (let [version 2
+        id (str schema "-v" version "-" user "-" time-for-id "-" (clojure.string/lower-case source))]
     (time->str
       {:_id     id
        :_class  "org.openmhealth.dsu.domain.DataPoint"
@@ -32,7 +33,7 @@
        :header  {:id                             id,
                  :schema_id                      {:namespace namespace,
                                                    :name      schema,
-                                                   :version   {:major 1, :minor 0}},
+                                                   :version   {:major version, :minor 0}},
                  :creation_date_time             creation-datetime,
                  :creation_date_time_epoch_milli (c/to-long creation-datetime)
                  :acquisition_provenance         {:source_name source,
