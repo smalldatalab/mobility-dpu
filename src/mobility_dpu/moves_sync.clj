@@ -240,7 +240,7 @@
 
 (defrecord MovesUserDatasource [user]
   UserDataSourceProtocol
-  (source-name [_] "Moves")
+  (source-name [_] "Movesp-App")
   (user [_] user)
   (extract-episodes [_]
     (moves-extract-episodes user))

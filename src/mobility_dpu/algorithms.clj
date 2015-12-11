@@ -85,11 +85,17 @@
       (and ever-at-home? (seq before-get-home-at-midnight) (not ever-leave-home?))
       {:time_not_at_home_in_seconds time-not-at-home
        :return_home_time (:end (last before-get-home-at-midnight))}
+
       ; leave home at some point and never return home
       (and ever-at-home? (seq after-leave-home-at-night)
            (>= (t/hour (:end (last episodes))) 22))
-      {:time_not_at_home_in_seconds time-not-at-home
-       :leave_home_time (:start (first after-leave-home-at-night))}
+      {:time_not_at_home_in_seconds
+                        (+ (t/in-seconds
+                             (t/interval (:end (last befroe-leave-home))
+                                         (:start (first after-leave-home-at-night))))
+                          time-not-at-home)
+       :leave_home_time (:end (last befroe-leave-home))}
+
       ; never leave home
       (and ever-at-home? (not ever-leave-home?))
       {:time_not_at_home_in_seconds time-not-at-home}
