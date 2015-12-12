@@ -6,9 +6,10 @@
   (:import (mobility_dpu.protocols LocationSample)))
 
 (s/defn haversine :- s/Num
+  "Return distance between two points in the kilometers"
   [a :- Location
    b :- Location]
-  "Return distance between two points in the kilometers"
+
   (let [R 6372.8                                            ; kilometers
         dlat (Math/toRadians (- ^double (:latitude b) ^double (:latitude a)))
         dlon (Math/toRadians (- ^double (:longitude b) ^double (:longitude a)))

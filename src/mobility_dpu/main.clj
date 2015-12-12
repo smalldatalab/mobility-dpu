@@ -6,8 +6,10 @@
             [mobility-dpu.moves-sync :as moves]
             [mobility-dpu.shims-sync :as shims]
             [mobility-dpu.summary :as summary]
+            [mobility-dpu.home-location :as home]
             [clj-time.core :as t]
-            [schema.core :as s])
+            [schema.core :as s]
+            )
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android]
         [mobility-dpu.ios]
@@ -70,15 +72,21 @@
                 (nil? last-process-time)
                 (t/after? last-raw-data-update-time last-process-time)
                 )
+            (try
+              (let [provided-home-loc (home/provided-home-location user db)]
+                (if provided-home-loc
+                  (info (str "User " user " provided home location:" provided-home-loc)))
+                  (doseq [datapoint (summary/get-datapoints
+                                      (source-fn user)
+                                      (home/provided-home-location user db))]
+                    (info "Save data for " user " "
+                          (get-in datapoint [:body :date]) " "
+                          (get-in datapoint [:body :device]))
+                    (save db (s/validate MobilityDataPoint datapoint)))
 
-
-            (try (doseq [datapoint (summary/get-datapoints (source-fn user))]
-                   (info "Save data for " user " "
-                         (get-in datapoint [:body :date]) " "
-                         (get-in datapoint [:body :device]))
-                   (save db (s/validate MobilityDataPoint datapoint)))
-                 ; store number of raw data counts to check data update in the future
-                 (swap! user-source->last-update assoc [user source-fn] last-raw-data-update-time)
+                  ; store number of raw data counts to check data update in the future
+                  (swap! user-source->last-update assoc [user source-fn] last-raw-data-update-time)
+                )
                  (catch Exception e (error e)))
             (info "No new data for " user)
             )
@@ -90,16 +98,5 @@
 
   )
 
-
-
-
-
-  (def dps
-    (let [source (->MovesUserDatasource
-                   "google:108274213374340954232"
-                   )]
-      (mobility-dpu.summary/get-datapoints source)
-      )
-    )
 
 

@@ -193,9 +193,28 @@
        )
   )
 
+(s/defn provided-home-location->cluster :- (s/maybe Cluster)
+  [episodes :- [EpisodeSchema]
+   location :- Location]
+  (if location
+    (->> (map :cluster episodes)
+         (filter #(and (:cluster %)
+                       (< (spatial/haversine location (:cluster %)) 0.1)))
+         (group-by :cluster)
+         (sort-by (fn [[cluster epis]]
+                    (apply + (map #(t/in-seconds (t/interval (:start %) (:end %))) epis))
+                    ))
+         (last)
+         (first)
+
+         ))
+
+
+  )
+
 (s/defn infer-home-clusters :- #{Cluster}
-  [episodes :- [EpisodeSchema]]
   "Determine the clusters that are home locations (i.e. the location the user leaves from at morning and comes back to at night)"
+  [episodes :- [EpisodeSchema]]
   (->>
     (group-by-day episodes)
     (map :episodes)
@@ -231,5 +250,7 @@
     (map first)
     (into #{})
     )
+
+
   )
 

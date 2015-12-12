@@ -10,5 +10,6 @@
     "log-file": "/var/log/ohmage-dpu/mobility-dpu.log",
     "sync-tasks": {
         "fitbit": ["STEPS", "ACTIVITY"]
-    }
+    },
+    "gmap-geo-coding-server-key" : "YOUR_GMAP_API_KEY"
 }

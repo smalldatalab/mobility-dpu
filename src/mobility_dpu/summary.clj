@@ -143,16 +143,27 @@
   ))
 
 
-(s/defn get-datapoints :- MobilityDataPoint [source :- (s/protocol UserDataSourceProtocol)]
+(s/defn get-datapoints :- MobilityDataPoint
+  [source :- (s/protocol UserDataSourceProtocol)
+   provided-home-location :- (s/maybe Location)]
   (let [user (user source)
         device (source-name source)
         step-supported? (step-supported? source)
         ; extract episodes from raw data
         episodes (-> (extract-episodes source)
-                     ;
+
                      (assoc-cluster 50 20)
                      (merge-still-epidoses))
-        home-clusters (infer-home-clusters episodes)
+        inferred-home-clusters (infer-home-clusters episodes)
+        provided-home-cluster (if provided-home-location
+                                (provided-home-location->cluster
+                                  episodes provided-home-location))
+        home-clusters
+        (cond-> inferred-home-clusters
+                provided-home-cluster
+                (conj provided-home-cluster))
+
+
         episodes (map #(cond->
                         %
                         (home-clusters (:cluster %))
