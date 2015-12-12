@@ -169,6 +169,7 @@
                         (home-clusters (:cluster %))
                         (assoc :home? true)) episodes)
         ]
+    (if provided-home-cluster (info "Provided home location matched with at least cluster" provided-home-cluster))
     (mapcat
       (fn [day-group]
         [(summarize user device step-supported? day-group)

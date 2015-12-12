@@ -169,7 +169,7 @@
 (s/defn group-by-day :- [DayEpisodeGroup]
   [episodes :- [EpisodeSchema]]
   "Group epidsodes by days. In the case where a segment belongs to mutiple groups (i.e. spanning multiple days),
-   it will be included in the both groups with start/end time trimed to the corresponding days"
+   it will be simultaneously included in those groups but with start/end time trimed to the corresponding timeframe"
   (->> (group-by (comp c/to-local-date :start) episodes)
        (map (fn [[date epis]]
               (let [first-epi (first (sort-by :start epis))
@@ -194,10 +194,11 @@
   )
 
 (s/defn provided-home-location->cluster :- (s/maybe Cluster)
+  "Identify the cluster in which the user\n   spent the most time and is within 100 meters away from the provided home location"
   [episodes :- [EpisodeSchema]
    location :- Location]
   (if location
-    (->> (map :cluster episodes)
+    (->> episodes
          (filter #(and (:cluster %)
                        (< (spatial/haversine location (:cluster %)) 0.1)))
          (group-by :cluster)
@@ -213,7 +214,9 @@
   )
 
 (s/defn infer-home-clusters :- #{Cluster}
-  "Determine the clusters that are home locations (i.e. the location the user leaves from at morning and comes back to at night)"
+  "Determine the clusters that are home locations through the algorithm:
+  1) For each day if the first cluster and last cluster are the same, assume the cluster is the home for that day, and the rest cluster are non-home
+  2) Take a cluster as home, if number of day it is assumed to be home is more than the number of day it is assumed to be non-home"
   [episodes :- [EpisodeSchema]]
   (->>
     (group-by-day episodes)

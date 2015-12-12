@@ -3,7 +3,6 @@
   (:require [taoensso.timbre :as timbre]
             [taoensso.timbre.appenders.core :as appenders]
             [mobility-dpu.temporal :refer [dt-parser]]
-            [mobility-dpu.moves-sync :as moves]
             [mobility-dpu.shims-sync :as shims]
             [mobility-dpu.summary :as summary]
             [mobility-dpu.home-location :as home]
@@ -11,11 +10,11 @@
             [schema.core :as s]
             )
   (:use [mobility-dpu.protocols]
-        [mobility-dpu.android]
-        [mobility-dpu.ios]
+        [mobility-dpu.android :only [->AndroidUserDatasource]]
+        [mobility-dpu.ios :only [->iOSUserDatasource]]
         [mobility-dpu.moves-sync :only [->MovesUserDatasource]]
-        [mobility-dpu.database]
-        [mobility-dpu.config]
+        [mobility-dpu.database :only [mongodb]]
+        [mobility-dpu.config :only [config]]
         [aprint.core]))
 
 ; config logger
@@ -78,7 +77,7 @@
                   (info (str "User " user " provided home location:" provided-home-loc)))
                   (doseq [datapoint (summary/get-datapoints
                                       (source-fn user)
-                                      (home/provided-home-location user db))]
+                                      provided-home-loc)]
                     (info "Save data for " user " "
                           (get-in datapoint [:body :date]) " "
                           (get-in datapoint [:body :device]))

@@ -36,7 +36,7 @@
 (def mem-geocoding (memoize geocoding))
 
 (s/defn provided-home-location :- (s/maybe Location)
-  "Get the lat and lng of the home location that is provided by the user through home location survey.
+  "Get the coordinates of the home location provided by the user through home-location-survey.
   Return nil if no home location is provided."
   [user db :- (s/protocol DatabaseProtocol)]
   (let [{:keys [streetNumberName zipCode]} (:body (last (query db "io.smalldata" "home-location-survey" user)))]
