@@ -5,11 +5,12 @@
             [mobility-dpu.temporal :as temporal]
             [clj-time.coerce :as c]
 
-            )
+            [taoensso.timbre :as timbre])
   (:use [mobility-dpu.protocols])
   (:import (org.joda.time DateTime)))
 
 
+(timbre/refer-timbre)
 
 (s/defn assoc-cluster :- [EpisodeSchema]
         "Associate (still) episodes with their corresponding cluster assignments based on a time-based DBSCAN with the given
