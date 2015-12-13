@@ -197,62 +197,83 @@
   "Identify the cluster in which the user\n   spent the most time and is within 100 meters away from the provided home location"
   [episodes :- [EpisodeSchema]
    location :- Location]
-  (if location
-    (->> episodes
-         (filter #(and (:cluster %)
-                       (< (spatial/haversine location (:cluster %)) 0.1)))
-         (group-by :cluster)
-         (sort-by (fn [[cluster epis]]
-                    (apply + (map #(t/in-seconds (t/interval (:start %) (:end %))) epis))
-                    ))
-         (last)
-         (first)
+  (let [cluster (->> episodes
+                     (filter #(and (:cluster %)
+                                   (< (spatial/haversine location (:cluster %)) 0.1)))
+                     (group-by :cluster)
+                     (sort-by (fn [[cluster epis]]
+                                (apply + (map #(t/in-seconds (t/interval (:start %) (:end %))) epis))
+                                ))
+                     (last)
+                     (first)
 
-         ))
+                     )]
+    (if cluster (info "User has been to the provided home location:" cluster))
+    cluster
+    )
 
 
   )
 
 (s/defn infer-home-clusters :- #{Cluster}
   "Determine the clusters that are home locations through the algorithm:
-  1) For each day if the first cluster and last cluster are the same, assume the cluster is the home for that day, and the rest cluster are non-home
+  1) For each day if the user has been to the provided home location
+      or the first cluster and last cluster are the same,
+      assume the cluster is the home for that day, and the rest cluster are non-home
   2) Take a cluster as home, if number of day it is assumed to be home is more than the number of day it is assumed to be non-home"
-  [episodes :- [EpisodeSchema]]
-  (->>
-    (group-by-day episodes)
-    (map :episodes)
-    (mapcat
-      (fn [episodes]
-        (let [episodes
-              (filter #(and (:cluster %) (not= (:cluster %) :noise)) episodes)
-              first-cluster (:cluster (first episodes))
-              last-cluster  (:cluster (last episodes))
-              ]
-          (if (and (not (nil? first-cluster))
-                   (= first-cluster last-cluster)
+  [episodes :- [EpisodeSchema] provided-home-location :- (s/maybe Location)]
+
+
+  (let [
+        provided-home-cluster
+        (if provided-home-location
+          (provided-home-location->cluster
+            episodes provided-home-location))]
+    (->>
+      (filter :cluster episodes)
+      (group-by-day)
+      (mapcat
+        (fn [{:keys [episodes]}]
+          (let [clusters (map :cluster episodes)]
+            (cond
+              ; if user has ever been to the provided home location.
+              ; assume the rest places are not home
+              (and provided-home-cluster (some #{provided-home-cluster} clusters))
+              (cons [provided-home-cluster :home]
+                    (->> clusters
+                         (remove #{provided-home-cluster})
+                         (distinct)
+                         (map #(vector % :non-home))
+                         )
+                    )
+
+              ; if user was at the same place at the begining and the end of the day
+              ; assume it is the home, and the rest are not home
+              (and (first clusters)
+                   (= (first clusters) (last clusters))
                    (< (t/hour (:start (first episodes))) 11)
                    (> (t/hour (:end (last episodes))) 17)
                    )
-            (cons [first-cluster :home]
-                  (->> (map :cluster episodes)
-                       (remove #(= first-cluster %))
-                       (distinct)
-                       (map #(vector % :non-home))
-                       )
-
+              (cons [(first clusters) :home]
+                    (->> clusters
+                         (remove #{(first clusters)})
+                         (distinct)
+                         (map #(vector % :non-home))
+                         )
+                    )
+              )
+            )))
+      (group-by first)
+      (filter (fn [[cluster types]]
+                (let [{:keys [home non-home]} (frequencies (map second types))]
+                  (> (or home 0) (or non-home 0))
                   )
-            )
-          )))
-    (group-by first)
-    (filter (fn [[cluster types]]
-              (let [{:keys [home non-home]} (frequencies (map second types))]
-                (> (or home 0) (or non-home 0))
                 )
               )
-            )
-    (map first)
-    (into #{})
-    )
+      (map first)
+      (into #{})
+      ))
+
 
 
   )

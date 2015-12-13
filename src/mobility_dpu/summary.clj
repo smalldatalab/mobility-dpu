@@ -154,22 +154,12 @@
 
                      (assoc-cluster 50 20)
                      (merge-still-epidoses))
-        inferred-home-clusters (infer-home-clusters episodes)
-        provided-home-cluster (if provided-home-location
-                                (provided-home-location->cluster
-                                  episodes provided-home-location))
-        home-clusters
-        (cond-> inferred-home-clusters
-                provided-home-cluster
-                (conj provided-home-cluster))
-
-
+        home-clusters (infer-home-clusters episodes provided-home-location)
         episodes (map #(cond->
                         %
                         (home-clusters (:cluster %))
                         (assoc :home? true)) episodes)
         ]
-    (if provided-home-cluster (info "Provided home location matched with at least cluster" provided-home-cluster))
     (mapcat
       (fn [day-group]
         [(summarize user device step-supported? day-group)
