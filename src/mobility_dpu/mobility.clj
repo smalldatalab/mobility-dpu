@@ -158,13 +158,15 @@
                            (seq partitions)
                            (extend-and-merge-still-partitions (* 1.5 60 60))))
         ]
+
     ; generate episodes
     (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
       (if p
-        (let [split (fn [seq]
-                      (->> seq
+        (let [split (fn [trace]
+                      (->> trace
                            (drop-while #(t/before? (timestamp %) (:start p)))
                            (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
+                           (map doall)
                            )
                       )
               [act-before act-after] (split act-seq)
@@ -190,8 +192,6 @@
 
     )
   )
-
-
 
 
 
