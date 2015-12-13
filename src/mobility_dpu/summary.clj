@@ -183,11 +183,3 @@
   )
 
 
-(use 'mobility-dpu.database)
-(use 'mobility-dpu.android)
-(let [source (->AndroidUserDatasource "google:108274213374340954232" (mongodb "omh" "dataPoint"))]
-  (-> (extract-episodes source)
-
-      (assoc-cluster 50 20)
-      (merge-still-epidoses))
-  )
