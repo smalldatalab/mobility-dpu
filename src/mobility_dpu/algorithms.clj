@@ -32,7 +32,7 @@
   If the user return home at the midnight, and never left again, the segments 3) 4) 5) will all be empty.
   "
   [episodes :- [EpisodeSchema]]
-  (let [place-episodes (filter #(= (:inferred-state %) :still) episodes)
+  (let [place-episodes (filter :cluster episodes)
         [before-get-home-at-midnight after-get-home]
         (split-with (complement :home?) place-episodes)
         [befroe-leave-home after-leave-home]

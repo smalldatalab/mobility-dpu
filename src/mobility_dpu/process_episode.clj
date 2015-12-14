@@ -154,15 +154,24 @@
   2) the gap between them is less than 60 miniutes,
   and 3) are of the same cluster
   into one still episode"
-  [[cur next & rest-episodes]]
-  (if cur
-    (if (and (= :still (:inferred-state cur) (:inferred-state next))
-             (not (nil? (:cluster cur)))
-             (= (:cluster cur) (:cluster next))
-             (<= (t/in-minutes (t/interval (:end cur) (:start next))) 60))
-      (lazy-seq (merge-still-epidoses (cons (merge-two cur next) rest-episodes)))
-      (cons cur (lazy-seq (merge-still-epidoses (cons next rest-episodes))))
-      )
+  [episodes :- [EpisodeSchema]]
+  (let [merge-still
+        (fn merge-still [[cur next & rest-episodes]]
+          (if cur
+            (if (and (:cluster cur) next
+                     (or (= (:cluster cur) (:cluster next))
+                         (nil? (:cluster next)))
+                     (<= (t/in-minutes (t/interval (:end cur) (:start next))) 60))
+              (lazy-seq (merge-still (cons (merge-two cur next) rest-episodes)))
+              (cons cur (lazy-seq (merge-still (cons next rest-episodes))))
+              )
+            ))]
+
+    (->> (filter (comp #{:still} :inferred-state) episodes)
+         merge-still
+         (concat (remove (comp #{:still} :inferred-state) episodes))
+         (sort-by :start)
+         )
     )
   )
 
@@ -262,6 +271,18 @@
                          (map #(vector % :non-home))
                          )
                     )
+              ; this is the weakest assumption. If none of the above is true,
+              ; assume the first and last clusters are home if they cover certain time range and are over 3 hrs long
+              ; but, unlike the other cases, do NOT assume the rest clusters are not home
+              (and (< (t/hour (:start (first episodes))) 8)
+                   (>= (t/in-hours (t/interval (:start (first episodes)) (:end (first episodes)))) 2)
+                   (> (t/hour (:end (last episodes))) 20)
+                   (>= (t/in-hours (t/interval (:start (last episodes)) (:end (last episodes)))) 2)
+                   )
+              [[(first clusters) :home]
+               [(last clusters) :home]
+               ]
+
               )
             )))
       (group-by first)

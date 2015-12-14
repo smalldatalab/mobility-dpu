@@ -81,45 +81,6 @@
   )
 
 
-(defn- extend-and-merge-still-partitions
-  "Partition a seq of activity samples where consecutive samples with the same inferred state are partitioned into one segments"
-  ([[cur & remains :as partitions] gap-allowance-in-secs]
-   {:pre [(every? #(and (:state %) (:start %) (:end %) (:activity-samples %)) partitions)]}
-   {:post [(every? #(and (:state %) (:start %) (:end %) (:activity-samples %)) partitions)]}
-   (if (seq remains)
-     (let [next (first remains)
-           cur-state (:state cur)
-           next-state (:state next)
-           gap (t/in-seconds (t/interval (:end cur) (:start next)))]
-       (cond
-         ; merge two "still" partitions if they are close in time
-         (and (= cur-state next-state :still) (<= gap gap-allowance-in-secs))
-         (lazy-seq
-           (extend-and-merge-still-partitions
-             (cons {:state            :still
-                    :start            (:start cur)
-                    :end              (:end next)
-                    :activity-samples (apply concat (map :activity-samples [cur next]))
-                    }
-                   (rest remains))
-             gap-allowance-in-secs))
-         ; extend a "still" partitions if the gap between it and the next partition is small
-         (and (= cur-state :still) (<= gap gap-allowance-in-secs))
-         (cons (assoc cur :end (t/minus (:start next) (t/millis 1)))
-               (lazy-seq
-                 (extend-and-merge-still-partitions remains gap-allowance-in-secs)))
-         :default
-         (cons cur (lazy-seq (extend-and-merge-still-partitions remains gap-allowance-in-secs)))
-         )
-       )
-     (list cur)
-     )
-    )
-  )
-
-
-
-
 
 
 
@@ -152,11 +113,6 @@
         ; remove 0-length partitions
         partitions (filter #(not= (:start %) (:end %)) partitions)
 
-
-        ;partitions
-        _ (comment (cond-> partitions
-                           (seq partitions)
-                           (extend-and-merge-still-partitions (* 1.5 60 60))))
         ]
 
     ; generate episodes
