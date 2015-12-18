@@ -6,7 +6,8 @@
             [mobility-dpu.summary]
             monger.joda-time
             [clj-time.core :as t]
-            [schema.core :as s])
+            [schema.core :as s]
+            [clj-time.coerce :as c])
   (:use [aprint.core]
         [mobility-dpu.protocols]
         [mobility-dpu.process-episode])
@@ -87,8 +88,11 @@
 (s/defn mobility-extract-episodes :- [EpisodeSchema]
   [activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
-   steps-samples :- [StepSample]
-   ]
+   steps-samples :- [StepSample]]
+  ; returned episodes must cover at least the dates covered by the actvity samples
+  {:post [(or (empty? activity-samples)
+              (= (c/to-local-date (:end (last %)))
+                 (c/to-local-date (timestamp (last (sort-by timestamp activity-samples))))))]}
   "Extract episodes from the given data source."
 
   (let [act-seq (sort-by timestamp activity-samples)
