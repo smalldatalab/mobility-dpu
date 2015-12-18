@@ -86,11 +86,12 @@
                                    provided-home-loc)]
                   (doseq [datapoint datapoints]
                     (save db (s/validate MobilityDataPoint datapoint)))
-                  (info "Save data for " user
-                        " " (get-in (first datapoints) [:body :device])
-                        " " (get-in (first datapoints) [:body :date])
-                        "-"  (get-in (last datapoints) [:body :date])
-                        )
+                  (if (seq datapoints)
+                    (info "Save data for " user
+                          " " (get-in (first datapoints) [:body :device])
+                          " " (get-in (first datapoints) [:body :date])
+                          "-"  (get-in (last datapoints) [:body :date])
+                          ))
                   )
 
                 ; store number of raw data counts to check data update in the future
