@@ -21,18 +21,22 @@
         coll "dataPoint"]
     (reify DatabaseProtocol
       (query [_ ns name user]
-        (for [row (mq/with-collection db coll
-                                      (mq/find {"header.schema_id.name"      name
-                                                "header.schema_id.namespace" ns
-                                                :user_id                     user})
-                                      (mq/keywordize-fields true)
-                                      (mq/sort {"header.creation_date_time_epoch_milli" 1})
-                                      )]
-          (->DataPointRecord
-            (:body row)
-            (mobility-dpu.temporal/dt-parser
-              (get-in row [:header :creation_date_time])))
-          ))
+        (let [rows (mq/with-collection db coll
+                                       (mq/find {"header.schema_id.name"      name
+                                                 "header.schema_id.namespace" ns
+                                                 :user_id                     user})
+                                       (mq/keywordize-fields true)
+                                       (mq/sort {"header.creation_date_time_epoch_milli" 1})
+                                       (mq/options :notimeout)
+                                       (mq/batch-size 10000)
+                                       )]
+          (for [row rows]
+            (->DataPointRecord
+              (:body row)
+              (mobility-dpu.temporal/dt-parser
+                (get-in row [:header :creation_date_time])))
+            ))
+        )
       (last-time [_ ns name user]
         (let [row (->> (mq/with-collection db coll
                                            (mq/find {"header.schema_id.name"      name

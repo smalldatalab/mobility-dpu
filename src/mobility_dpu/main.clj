@@ -17,16 +17,19 @@
         [mobility-dpu.config :only [config]]
         [aprint.core]))
 
-; config logger
-(timbre/refer-timbre)
-(timbre/merge-config!
-  {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
-(def db (mongodb))
+
+
 (defn -main
   "The application's main function"
   [& args]
 
+  ; config logger
+  (timbre/refer-timbre)
+  (timbre/merge-config!
+    {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
+
+  (let [db (mongodb)]
   ; Create a new thread to sync other shims sync tasks
   (future
     (loop []
@@ -52,7 +55,6 @@
       (recur))
     )
 
-
   ; sync Android and iOS mobility and Moves
   (let [user-source->last-update (atom {})]
     (loop []
@@ -75,22 +77,22 @@
               (let [provided-home-loc (home/provided-home-location user db)]
                 (if provided-home-loc
                   (info (str "User " user " provided home location:" provided-home-loc)))
-                  (let [datapoints (summary/get-datapoints
-                                    (source-fn user)
-                                    provided-home-loc)]
-                    (doseq [datapoint datapoints]
-                      (save db (s/validate MobilityDataPoint datapoint)))
-                    (info "Save data for " user
-                           " " (get-in (first datapoints) [:body :device])
-                           " " (get-in (first datapoints) [:body :date])
-                           "-"  (get-in (last datapoints) [:body :date])
-                          )
-                    )
+                (let [datapoints (summary/get-datapoints
+                                   (source-fn user)
+                                   provided-home-loc)]
+                  (doseq [datapoint datapoints]
+                    (save db (s/validate MobilityDataPoint datapoint)))
+                  (info "Save data for " user
+                        " " (get-in (first datapoints) [:body :device])
+                        " " (get-in (first datapoints) [:body :date])
+                        "-"  (get-in (last datapoints) [:body :date])
+                        )
+                  )
 
-                  ; store number of raw data counts to check data update in the future
-                  (swap! user-source->last-update assoc [user source-fn] last-raw-data-update-time)
+                ; store number of raw data counts to check data update in the future
+                (swap! user-source->last-update assoc [user source-fn] last-raw-data-update-time)
                 )
-                 (catch Exception e (error e)))
+              (catch Exception e (error e)))
             (info "No new data for " user)
             )
           )
@@ -98,6 +100,11 @@
       (recur)
       )
     )
+  )
+
+
+
+
 
   )
 

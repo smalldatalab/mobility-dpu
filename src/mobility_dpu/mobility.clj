@@ -86,14 +86,12 @@
 
 
 (s/defn mobility-extract-episodes :- [EpisodeSchema]
+  "Extract episodes from the given data source."
   [activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
    steps-samples :- [StepSample]]
-  ; returned episodes must cover at least the dates covered by the actvity samples
-  {:post [(or (empty? activity-samples)
-              (= (c/to-local-date (:end (last %)))
-                 (c/to-local-date (timestamp (last (sort-by timestamp activity-samples))))))]}
-  "Extract episodes from the given data source."
+
+
 
   (let [act-seq (sort-by timestamp activity-samples)
         loc-seq (sort-by timestamp location-samples)
