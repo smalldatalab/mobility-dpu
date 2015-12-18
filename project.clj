@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
-  :jvm-opts ["-Xmx1g" "-server"]
+  :jvm-opts ["-Xmx2g" "-server"]
   :plugins [[lein-localrepo "0.5.3"]]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [aprint "0.1.1"]

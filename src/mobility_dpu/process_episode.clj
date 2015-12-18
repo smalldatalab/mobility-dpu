@@ -7,7 +7,7 @@
 
             [taoensso.timbre :as timbre])
   (:use [mobility-dpu.protocols])
-  (:import (org.joda.time DateTime)))
+  (:import (org.joda.time DateTime LocalDate)))
 
 
 (timbre/refer-timbre)
@@ -177,29 +177,66 @@
 
 
 (s/defn group-by-day :- [DayEpisodeGroup]
+  "Group the epidsodes by days. In the case where a segment belongs to mutiple groups (i.e. spanning multiple days),
+   it will be simultaneously included in those groups but with start/end time trimed to the corresponding timeframe
+
+   The algorithm works as follows:
+   1) compute the dates that each episode covers
+   2) group episodes into the date groups they cover
+   3) use the timezone in which the majority of the episode occured as the timezone of that date
+   4) compute the interval of the date within the given timezone, and find all episodes that cover the interval
+   5) trim episodes to fit the interval
+   "
   [episodes :- [EpisodeSchema]]
-  "Group epidsodes by days. In the case where a segment belongs to mutiple groups (i.e. spanning multiple days),
-   it will be simultaneously included in those groups but with start/end time trimed to the corresponding timeframe"
-  (->> (group-by (comp c/to-local-date :start) episodes)
-       (map (fn [[date epis]]
-              (let [first-epi (first (sort-by :start epis))
-                    zone (.getZone ^DateTime (:start first-epi))
-                    start (.withTimeAtStartOfDay ^DateTime (:start first-epi))
-                    interval (t/interval start
-                                         (t/minus (t/plus start (t/days 1)) (t/millis 1)))]
-                {:date     date
-                 :zone     zone
-                 :episodes (->>
-                             episodes
-                             (filter #(t/overlaps? interval (t/interval (:start %) (:end %))))
-                             (sort-by :start)
-                             (map (partial temporal/trim-episode-to-day-range date zone)))
-                           }
 
+  (->>
+
+       (let [; iterate over all the local dates this episodes cover
+             epi->dates (fn [{:keys [start end]}]
+                     (->>
+                       (c/to-local-date start)
+                       (iterate #(t/plus % (t/days 1) ))
+                       (take-while (complement #(t/after? % (c/to-local-date end))))))
+                    ]
+         (->> (for [epi episodes]
+                (for [date (epi->dates epi)]
+                  [date epi]
+                  )
                 )
+              (apply concat)
+              (group-by first)
+              (map (fn [[date date-epi]]
+                     (let [epis (map second date-epi)
+                           ; use the timzone in which the majority segments occured
+                           zone (->>
+                                  epis
+                                  (map #(.getZone ^DateTime (:start %)) )
+                                  (frequencies)
+                                  (sort-by second)
+                                  (reverse)
+                                  (first)
+                                  (first)
+                                  )
+                           start (.toDateTimeAtStartOfDay ^LocalDate date zone)
+                           interval (t/interval start
+                                                (t/minus (t/plus start (t/days 1)) (t/millis 1)))
 
-              ))
-       (sort-by :date)
+                           ]
+                       {:date     date
+                        :zone     zone
+                        :episodes (->>
+                                    episodes
+                                    (filter #(t/overlaps? interval (t/interval (:start %) (:end %))))
+                                    (sort-by :start)
+                                    (map (partial temporal/trim-episode-to-day-range date zone)))
+                        }
+                       )
+                     ))
+              (sort-by :date)
+              )
+
+         )
+
        )
   )
 

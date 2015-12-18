@@ -151,7 +151,6 @@
         step-supported? (step-supported? source)
         ; extract episodes from raw data
         episodes (-> (extract-episodes source)
-
                      (assoc-cluster 50 20)
                      (merge-still-epidoses))
         home-clusters (infer-home-clusters episodes provided-home-location)

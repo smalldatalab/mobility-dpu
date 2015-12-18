@@ -75,13 +75,17 @@
               (let [provided-home-loc (home/provided-home-location user db)]
                 (if provided-home-loc
                   (info (str "User " user " provided home location:" provided-home-loc)))
-                  (doseq [datapoint (summary/get-datapoints
-                                      (source-fn user)
-                                      provided-home-loc)]
-                    (info "Save data for " user " "
-                          (get-in datapoint [:body :date]) " "
-                          (get-in datapoint [:body :device]))
-                    (save db (s/validate MobilityDataPoint datapoint)))
+                  (let [datapoints (summary/get-datapoints
+                                    (source-fn user)
+                                    provided-home-loc)]
+                    (doseq [datapoint datapoints]
+                      (save db (s/validate MobilityDataPoint datapoint)))
+                    (info "Save data for " user
+                           " " (get-in (first datapoints) [:body :device])
+                           " " (get-in (first datapoints) [:body :date])
+                           "-"  (get-in (last datapoints) [:body :date])
+                          )
+                    )
 
                   ; store number of raw data counts to check data update in the future
                   (swap! user-source->last-update assoc [user source-fn] last-raw-data-update-time)
