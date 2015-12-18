@@ -90,10 +90,8 @@
   [activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
    steps-samples :- [StepSample]]
-
-
-
   (let [act-seq (sort-by timestamp activity-samples)
+        _ (println (last act-seq))
         loc-seq (sort-by timestamp location-samples)
         step-seq (sort-by timestamp steps-samples )
         ; remove the location samples that have low accuracy
@@ -124,7 +122,7 @@
                       (->> trace
                            (drop-while #(t/before? (timestamp %) (:start p)))
                            (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
-                           (map doall)
+                           ;(map doall)
                            )
                       )
               [act-before act-after] (split act-seq)
