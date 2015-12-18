@@ -8,7 +8,7 @@
             [mobility-dpu.home-location :as home]
             [clj-time.core :as t]
             [schema.core :as s]
-            [monger.core :as mg])
+            )
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android :only [->AndroidUserDatasource]]
         [mobility-dpu.ios :only [->iOSUserDatasource]]
@@ -18,16 +18,16 @@
         [aprint.core]))
 
 
+(timbre/refer-timbre)
+(timbre/merge-config!
+  {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
-
+(def db (mongodb))
 (defn -main
   "The application's main function"
   [& args]
 
   ; config logger
-  (timbre/refer-timbre)
-  (timbre/merge-config!
-    {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
   (let [db (mongodb)]
   ; Create a new thread to sync other shims sync tasks
