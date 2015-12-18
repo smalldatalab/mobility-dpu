@@ -91,7 +91,6 @@
    location-samples :- [LocationSample]
    steps-samples :- [StepSample]]
   (let [act-seq (sort-by timestamp activity-samples)
-        _ (println (last act-seq))
         loc-seq (sort-by timestamp location-samples)
         step-seq (sort-by timestamp steps-samples )
         ; remove the location samples that have low accuracy
@@ -114,7 +113,7 @@
         partitions (filter #(not= (:start %) (:end %)) partitions)
 
         ]
-
+    (info "Mobility data from " (timestamp (first act-seq)) "to" (timestamp (last act-seq)))
     ; generate episodes
     (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
       (if p

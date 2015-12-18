@@ -18,17 +18,21 @@
         [aprint.core]))
 
 
-(timbre/refer-timbre)
-(timbre/merge-config!
-  {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
+(comment
+  (timbre/refer-timbre)
+  (timbre/merge-config!
+    {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
-(def db (mongodb))
+  (def db (mongodb)))
+
 (defn -main
   "The application's main function"
   [& args]
 
   ; config logger
-
+  (timbre/refer-timbre)
+  (timbre/merge-config!
+    {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
   (let [db (mongodb)]
   ; Create a new thread to sync other shims sync tasks
   (future
