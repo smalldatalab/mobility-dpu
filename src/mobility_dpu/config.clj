@@ -4,14 +4,23 @@
 
 
 (def default
-  {:filter-walking-speed   9
+  {
+   ; mobility summary config
+   :filter-walking-speed   9
    :n-meters-of-gait-speed 50
    :quantile-of-gait-speed 0.9
    :max-human-speed 7
-   :shim-endpoint          "http://localhost:8083"
+
+   ; mongodb stuff
    :mongodb                nil
-   :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
+   :dbname                 "omh"
+
+   ; where to write the log file
    :log-file               "/var/log/ohmage-dpu/mobility-dpu.log"
+
+   ; the shim sync stuff
+   :shim-endpoint          "http://localhost:8083"
+   :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
    })
 
 

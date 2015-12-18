@@ -11,13 +11,14 @@
 
 
 
-
+(def db-connection
+  (delay (-> (mg/get-db (mg/connect (:mongodb @config)) (:dbname @config)))))
 
 (defn mongodb
   "Create a MongoDB-backed DatabaseProtocol"
-  [db coll]
-  (let [conn (mg/connect (:mongodb @config))
-        db (mg/get-db conn db)]
+  []
+  (let [db @db-connection
+        coll "dataPoint"]
     (reify DatabaseProtocol
       (query [_ ns name user]
         (for [row (mq/with-collection db coll

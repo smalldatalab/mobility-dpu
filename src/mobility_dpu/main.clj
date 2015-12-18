@@ -8,7 +8,7 @@
             [mobility-dpu.home-location :as home]
             [clj-time.core :as t]
             [schema.core :as s]
-            )
+            [monger.core :as mg])
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android :only [->AndroidUserDatasource]]
         [mobility-dpu.ios :only [->iOSUserDatasource]]
@@ -22,7 +22,7 @@
 (timbre/merge-config!
   {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
-(def db (mongodb "omh" "dataPoint"))
+(def db (mongodb))
 (defn -main
   "The application's main function"
   [& args]

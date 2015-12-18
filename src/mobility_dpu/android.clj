@@ -48,16 +48,16 @@
   (source-name [_] "Android")
   (user [_] user)
   (extract-episodes [_]
-    (let [activity-samples (for [datapoint (concat (doall (query db "io.smalldatalab" "mobility-android-activity-stream" user)) ; Mobility after 3.0
-                                                   (doall (query db "omh" "mobility" user))) ; old Mobility data
+    (let [activity-samples (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-activity-stream" user) ; Mobility after 3.0
+                                                   (query db "omh" "mobility" user)) ; old Mobility data
                                  ]
                              (AndroidActivitySample.
                                (timestamp datapoint)
                                (datapoint->activity-prob-map datapoint)
                                )
                              )
-          location-samples (for [datapoint (concat (doall (query db "io.smalldatalab" "mobility-android-location-stream" user))
-                                                   (doall (query db "omh" "location" user)))]
+          location-samples (for [datapoint (concat (query db "io.smalldatalab" "mobility-android-location-stream" user)
+                                                   (query db "omh" "location" user))]
                              (LocationSample. (if-let [more-accurate-time (:timestamp (:body datapoint))]
                                                 (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
                                                 (timestamp datapoint))
