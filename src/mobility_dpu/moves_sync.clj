@@ -23,6 +23,7 @@
 (def moves-shim (str (:shim-endpoint @config) "/data/moves/"))
 (def profile-endpoint (str moves-shim "profile"))
 (def storyline-endpoint (str moves-shim "storyline"))
+(def summary-endpoint (str moves-shim "summary"))
 (def location-sample-accuracy 50)
 
 
@@ -101,14 +102,6 @@
 
 
 
-(defn- base-datapoint [user date zone storyline]
-  {:user              user
-   :device            "Moves-App"
-   :date              date
-   :creation-datetime (if (:endTime (last storyline))
-                        (DateTime/parse (:endTime (last (:segments storyline))) date-time-format)
-                        (mobility-dpu.temporal/to-last-millis-of-day date zone))}
-  )
 
 (defn- get-auths
   "return the authorizations the user has"
@@ -166,6 +159,37 @@
        (concat storylines (lazy-seq
                             (daily-storyline-sequence user (t/plus start (t/days 7)) til zone))))
      )
+    )
+  )
+
+(s/defn   reverse-daily-summary-sequence
+  "Query the storylines from the moves until the current date in the user's timezone"
+  ([user] (let [{:keys [first-date current-zone] :as response} (get-profile user)]
+            (if response
+              (reverse-daily-summary-sequence
+                user first-date
+                (c/to-local-date (t/to-time-zone (t/now) current-zone))
+                )
+              )
+            ))
+  ([user first-date to]
+
+    (let [from (t/minus to (t/days 30))
+          start (if (t/before? from first-date) first-date from)
+          response (request-throttle #(client/get summary-endpoint {:query-params     {"username"  user
+                                                                                         "dateStart" start
+                                                                                         "dateEnd"   to}
+                                                                      :as               :json
+                                                                      :throw-exceptions false
+                                                                      }))
+          summaries (->> (reverse (get-in response [:body :body])))
+
+          ]
+      (if (= start first-date)
+        summaries
+        (concat summaries (lazy-seq
+                             (reverse-daily-summary-sequence user first-date (t/minus to (t/days 31))))))
+      )
     )
   )
 
@@ -247,7 +271,9 @@
   (step-supported? [_]
     true)
   (last-update [_]
-    nil
+    (if-let [update-time (:lastUpdate (first (filter :lastUpdate (reverse-daily-summary-sequence user))))]
+      (DateTime/parse update-time date-time-format)
+      )
     )
   )
 
