@@ -96,6 +96,7 @@
   (datapoint/datapoint user
              "cornell"                                      ; namespace
              (str "mobility-daily-" type)                   ; schema name
+              2                                             ; version
              (clojure.string/lower-case device)             ; souce
              "SENSED"                                       ; modality
              date                                           ; time for id

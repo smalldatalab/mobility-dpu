@@ -30,7 +30,7 @@
   [user service schema body]
   (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
                  (get-in body [:effective_time_frame :date_time]))]
-    (datapoint user "omh" (name schema) (name service) "SENSED" time time body)
+    (datapoint user "omh" (name schema) 1 (name service) "SENSED" time time body)
     )
   )
 (defn get-data

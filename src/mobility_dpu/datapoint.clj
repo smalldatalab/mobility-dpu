@@ -23,8 +23,8 @@
 (defmethod time->str DateTimeZone [m] (str m))
 (defmethod time->str :default [m] m)
 
-(defn datapoint [user namespace schema source modality time-for-id creation-datetime body]
-  (let [version 2
+(defn datapoint [user namespace schema version source modality time-for-id creation-datetime body]
+  (let [version version
         id (str schema "-v" version "-" user "-" time-for-id "-" (clojure.string/lower-case source))]
     (time->str
       {:_id     id

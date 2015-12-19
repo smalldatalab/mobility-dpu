@@ -28,7 +28,7 @@
                                        (mq/keywordize-fields true)
                                        (mq/fields ["body" "header.creation_date_time"])
                                        (mq/sort {"header.creation_date_time_epoch_milli" 1})
-                                       (mq/options :notimeout)
+
                                        (mq/batch-size 10000)
                                        )]
           (for [row rows]
