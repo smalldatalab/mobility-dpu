@@ -163,7 +163,8 @@
   )
 
 (s/defn   reverse-daily-summary-sequence
-  "Query the storylines from the moves until the current date in the user's timezone"
+  "Query the Moves summaries in reverse chronolgical order (with batch size = 31 days)
+   until the first date of the user indicated in the profile"
   ([user] (let [{:keys [first-date current-zone] :as response} (get-profile user)]
             (if response
               (reverse-daily-summary-sequence

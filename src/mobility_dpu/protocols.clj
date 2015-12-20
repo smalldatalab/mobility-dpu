@@ -2,8 +2,10 @@
   mobility-dpu.protocols
   (:require [clj-time.core :as t]
             [schema.core :as s]
-            [clj-time.coerce :as c])
-  (:import (org.joda.time LocalDate DateTimeZone)))
+            [clj-time.coerce :as c]
+            [clj-time.format :as f])
+  (:import (org.joda.time LocalDate DateTimeZone)
+           (org.joda.time.format ISODateTimeFormat)))
 
 (def State (s/enum :in_vehicle
                    :on_bicycle
@@ -80,6 +82,8 @@
 
 
 
+(def DateSchema (s/pred #(f/parse (ISODateTimeFormat/date) (str %)) "valid date"))
+(def DateTimeSchema (s/pred #(f/parse (ISODateTimeFormat/dateTime) (str %)) "valid datetime"))
 
 (def DayEpisodeGroup
   {:date     LocalDate
@@ -88,9 +92,11 @@
 
 (def DataPoint
   {:header
-            {:acquisition_provenance         {:modality #"SENSED", :source_name s/Str}
+            {:acquisition_provenance         {(s/optional-key :modality) #"SENSED",
+                                              :source_name s/Str,
+                                              (s/optional-key :source_origin_id) s/Str}
              :creation_date_time_epoch_milli s/Int,
-             :creation_date_time             (s/pred #(c/from-string %) "valid datetime")
+             :creation_date_time             DateTimeSchema
              :schema_id                      {:version   {:minor s/Int, :major s/Int},
                                               :name      s/Str
                                               :namespace s/Str}
@@ -104,27 +110,29 @@
 (def SummaryDataPoint
   (assoc DataPoint
     :body
-    {:longest-trek-in-km                 s/Num,
-     :active_time_in_seconds             s/Num,
-     :walking_distance_in_km             s/Num,
-     (s/optional-key :leave_home_time)   (s/pred #(c/from-string %) "valid datetime"),
-     (s/optional-key :return_home_time)  (s/pred #(c/from-string %) "valid datetime"),
-     (s/optional-key :time_not_at_home_in_seconds) s/Num
-     :date                               #"\d{4}-\d\d-\d\d",
+    {:longest_trek                       {:unit #"km" :value s/Num},
+     :active_time                        {:unit #"sec" :value s/Num},
+     :walking_distance                   {:unit #"km" :value s/Num},
+     :home                               {
+                                          (s/optional-key :leave_home_time)   DateTimeSchema,
+                                          (s/optional-key :return_home_time)  DateTimeSchema,
+                                          (s/optional-key :time_not_at_home)  {:unit #"sec" :value s/Num}
+                                          }
+     :date                               DateSchema,
      :device                             s/Str
-     :max_gait_speed_in_meter_per_second (s/maybe s/Num),
-     :gait_speed                         {:gait_speed (s/maybe s/Num), :quantile s/Num, :n_meters s/Num}
-     :geodiameter_in_km                  s/Num,
-     :steps                              (s/maybe s/Num),
+     (s/optional-key :max_gait_speed)    {:unit #"m/s" :value s/Num},
+     (s/optional-key :gait_speed)        {:gait_speed s/Num, :quantile s/Num, :n_meters s/Num}
+     :geodiameter                        {:unit #"km" :value s/Num},
+     :step_count                         (s/maybe s/Num),
      :coverage                           s/Num,
-     :episodes                           [s/Any]})
+     :episodes                           [(dissoc EpisodeSchema :trace-data)]})
   )
 (def SegmentDataPoint
   (assoc DataPoint
     :body
-    {:date     #"\d{4}-\d\d-\d\d"
+    {:date     DateSchema
      :device   s/Str
-     :episodes [s/Any]
+     :episodes [EpisodeSchema]
      })
   )
 

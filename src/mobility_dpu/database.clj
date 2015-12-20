@@ -4,12 +4,21 @@
             [monger.collection :as mc]
 
             [mobility-dpu.temporal]
-            [schema.core :as s])
+            [schema.core :as s]
+            [monger.conversion :refer :all])
   (:use [mobility-dpu.config]
         [mobility-dpu.protocols])
-  )
+  (:import (org.joda.time.base AbstractInstant AbstractPartial)))
 
 
+;; convert datetime to string
+(extend-protocol ConvertToDBObject
+  AbstractInstant
+  (to-db-object [^AbstractInstant input]
+    (to-db-object (str input)))
+  AbstractPartial
+  (to-db-object [^AbstractPartial input]
+    (to-db-object (str input))))
 
 (def db-connection
   (delay (-> (mg/get-db (mg/connect (:mongodb @config)) (:dbname @config)))))
@@ -54,7 +63,7 @@
           )
         )
       (save [_ data]
-        (mc/save db coll data)
+        (mc/save db coll (s/validate DataPoint data))
         )
       (users [_] (mc/distinct db "endUser" "_id" {}))
       ))

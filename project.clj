@@ -6,6 +6,7 @@
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
   :jvm-opts ["-Xmx2g" "-server"]
+  :main mobility-dpu.main
   :plugins [[lein-localrepo "0.5.3"]]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [aprint "0.1.1"]

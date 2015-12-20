@@ -53,43 +53,16 @@
 
         (recur))
       )
-    ; sync Moves
-    (future
-      (loop []
-        (doseq [; run dpu for specifc users (if args are set) or all the users in the db
-                user (or (seq args) (users db))]
-          (let [source (->MovesUserDatasource user)]
-            ; only compute new data points if there are new raw data that have been uploaded
-            (try
-              (let [provided-home-loc (home/provided-home-location user db)]
-                (if provided-home-loc
-                  (info (str "User " user " provided home location:" provided-home-loc)))
-                (let [datapoints (summary/get-datapoints
-                                   source
-                                   provided-home-loc)]
-                  (doseq [datapoint datapoints]
-                    (save db (s/validate MobilityDataPoint datapoint)))
-                  (if (seq datapoints)
-                    (info "Save data for " user
-                          " " (get-in (first datapoints) [:body :device])
-                          " " (get-in (first datapoints) [:body :date])
-                          "-"  (get-in (last datapoints) [:body :date])
-                          ))
-                  )
-                )
-              (catch Exception e (error e)))
-            )
-          )
-        (recur)
-        ))
-    ; sync Android and iOS mobility
+
+    ; sync Android and iOS mobility and Moves
     (let [user-source->last-update (atom {})]
       (loop []
         (doseq [; run dpu for specifc users (if args are set) or all the users in the db
                 user (or (seq args) (users db))
                 ; functions to generate datapoints from different sources: Android, iOS, and Moves App
                 source-fn [#(->AndroidUserDatasource % db)
-                           #(->iOSUserDatasource % db)]]
+                           #(->iOSUserDatasource % db)
+                           #(->MovesUserDatasource %)]]
           (let [source (source-fn user)
                 last-raw-data-update-time (last-update source)
                 last-process-time (@user-source->last-update  [user source-fn])]

@@ -27,12 +27,36 @@
     )
   )
 (defn to-datapoint
+  "Convert data return by omh-shims to local data point"
   [user service schema body]
   (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
-                 (get-in body [:effective_time_frame :date_time]))]
-    (datapoint user "omh" (name schema) 1 (name service) "SENSED" time time body)
+                 (get-in body [:effective_time_frame :date_time]))
+        ]
+    (datapoint user "omh" (name schema) 1 0 (name service) "SENSED" time time body)
     )
   )
+
+(defn to-datapoint-with-header
+  "Convert data return by Shimmer to local data point"
+  [user header body]
+  (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
+                 (get-in body [:effective_time_frame :date_time]))
+        {:keys [name namespace version]} (get-in header [:schema_id])
+        {:keys [source_name source_origin_id]} (get-in header [:acquisition_provenance])
+        _ (println header)
+        [major minor] (clojure.string/split version #"\.")
+
+
+        ]
+    (datapoint user namespace name
+               (Integer/parseInt major) (Integer/parseInt minor)
+               source_name "SENSED"
+               time time body
+               :source_origin_id source_origin_id)
+    )
+  )
+
+
 (defn get-data
   "Send request to shims server to get the NORMALIZED data points.
   Return nil if the endpoint does not support normalization"
@@ -52,6 +76,21 @@
           )
     )
   )
+(defn extract-datapoints [user responses service]
+  (if (map? (first responses))
+    ; for shimmer
+    (for [{:keys [body header]} responses]
+      ; convert the returned data point to the datapoint object that can be stored to the database
+      (to-datapoint-with-header user header body)
+      )
+    ; for omh-shims
+    (for [[schema datapoints] responses]
+      (for [dp datapoints]
+        ; convert the returned data point to the datapoint object that can be stored to the database
+        (if dp
+          (to-datapoint user service schema dp))
+        )
+      )))
 
 (defn get-datapoints
   "Return normalized datapoints for the given users from the sync tasks"
@@ -62,14 +101,7 @@
       ;for each endpoint
       (for [endpoint endpoints]
         ; get data points from the shims server
-        (for [[schema datapoints] (:body (get-data user service endpoint))]
-          (for [dp datapoints]
-            ; convert the returned data point to the datapoint object that can be stored to the database
-            (if dp
-              (to-datapoint user service schema dp))
-            )
-          )
-        )
+        (extract-datapoints user (:body (get-data user service endpoint)) service))
 
       )
     (flatten)

@@ -113,8 +113,6 @@
         partitions (filter #(not= (:start %) (:end %)) partitions)
 
         ]
-    (if (seq act-seq)
-      (info "Mobility data from " (timestamp (first act-seq)) "to" (timestamp (last act-seq))))
     ; generate episodes
     (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
       (if p

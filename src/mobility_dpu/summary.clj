@@ -78,15 +78,15 @@
 (s/defn geodiameter :- s/Num [episodes :- [EpisodeSchema]]
   (algorithms/geodiameter-in-km (filter identity (map :cluster episodes)))
   )
-(defn- gait-speed [episodes]
+(defn- gait-speed [episodes n-meter quantile]
   (algorithms/x-quantile-n-meter-gait-speed
     (->> episodes
          (filter #(= (:inferred-state %) :on_foot))
          (map  (comp :location-trace :trace-data))
          (filter seq)
          )
-    (:quantile-of-gait-speed @config)
-    (:n-meters-of-gait-speed @config))
+     quantile
+     n-meter)
 
 
   )
@@ -96,7 +96,7 @@
   (datapoint/datapoint user
              "cornell"                                      ; namespace
              (str "mobility-daily-" type)                   ; schema name
-              2                                             ; version
+              2 0                                           ; version
              (clojure.string/lower-case device)             ; souce
              "SENSED"                                       ; modality
              date                                           ; time for id
@@ -119,32 +119,37 @@
 
   )
 
-(s/defn summarize :- SummaryDataPoint
+(s/defn  summarize :- SummaryDataPoint
   [user :- s/Str
    device :- s/Str
    step-supported? :- s/Bool
    {:keys [episodes date zone]} :- DayEpisodeGroup]
-  (mobility-datapoint
-    user device "summary"
-    date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
-    (merge (infer-home episodes)
-           {:geodiameter_in_km                  (geodiameter episodes)
-            :walking_distance_in_km             (walking-distance-in-km episodes)
-            :active_time_in_seconds             (active-time-in-seconds episodes)
-            :steps                              (if step-supported? (total-step-count episodes))
-            :max_gait_speed_in_meter_per_second (gait-speed episodes)
-            :gait_speed                         {:n_meters   (:n-meters-of-gait-speed @config)
-                                                 :quantile   (:quantile-of-gait-speed @config)
-                                                 :gait_speed (gait-speed episodes)
-                                                 }
-            :longest-trek-in-km                 (longest-trek-in-km episodes)
-            :coverage                           (algorithms/coverage date zone episodes)
-            :episodes                           (map #(dissoc % :raw-data :trace-data) episodes)
-            })
-  ))
+  (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config) )]
+    (mobility-datapoint
+      user device "summary"
+      date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
+      (cond->
+        {:home                               (infer-home episodes)
+         :geodiameter                        {:unit "km", :value  (geodiameter episodes)}
+         :walking_distance                   {:unit "km", :value  (walking-distance-in-km episodes)}
+         :active_time                        {:unit "sec" :value (active-time-in-seconds episodes)}
+         :step_count                              (if step-supported? (total-step-count episodes))
+         :longest_trek                       {:unit "km" :value (longest-trek-in-km episodes)}
+         :coverage                           (algorithms/coverage date zone episodes)
+         :episodes                           (map #(dissoc % :raw-data :trace-data) episodes)
+         }
+        gait
+        (assoc
+          :max_gait_speed                     {:unit "m/s" :value gait}
+          :gait_speed                         {:n_meters   (:n-meters-of-gait-speed @config)
+                                               :quantile   (:quantile-of-gait-speed @config)
+                                               :gait_speed gait
+                                               }))
+
+      )))
 
 
-(s/defn get-datapoints :- MobilityDataPoint
+(s/defn ^:always-validate get-datapoints :- [MobilityDataPoint]
   [source :- (s/protocol UserDataSourceProtocol)
    provided-home-location :- (s/maybe Location)]
   (let [user (user source)
