@@ -24,6 +24,9 @@
 
    ; mobility datapoint version
    :mobility-datapoint-version "2.0"
+
+   ; gmap api key
+   :gmap-geo-coding-server-key "YOUR_GMAP_API_KEY"
    })
 
 
