@@ -8,17 +8,26 @@
             [monger.conversion :refer :all])
   (:use [mobility-dpu.config]
         [mobility-dpu.protocols])
-  (:import (org.joda.time.base AbstractInstant AbstractPartial)))
+  (:import (org.joda.time.base AbstractInstant AbstractPartial)
+           (clojure.lang IPersistentMap IPersistentCollection)
+           (org.joda.time ReadableInstant ReadablePartial DateTimeZone)))
 
 
 ;; convert datetime to string
-(extend-protocol ConvertToDBObject
-  AbstractInstant
-  (to-db-object [^AbstractInstant input]
-    (to-db-object (str input)))
-  AbstractPartial
-  (to-db-object [^AbstractPartial input]
-    (to-db-object (str input))))
+(defmulti time->str class)
+(defmethod time->str IPersistentMap [m]
+  (reduce (fn [m [k v]]
+            (assoc m (time->str k) (time->str v))
+            ) {} m))
+(defmethod time->str String [m] m)
+(defmethod time->str IPersistentCollection [m]
+  (map time->str m))
+(defmethod time->str ReadableInstant [m] (str m))
+(defmethod time->str ReadablePartial [m] (str m))
+(defmethod time->str DateTimeZone [m] (str m))
+(defmethod time->str :default [m] m)
+
+
 
 (def db-connection
   (delay (-> (mg/get-db (mg/connect (:mongodb @config)) (:dbname @config)))))
@@ -63,7 +72,7 @@
           )
         )
       (save [_ data]
-        (mc/save db coll (s/validate DataPoint data))
+        (mc/save db coll (time->str (s/validate DataPoint data)))
         )
       (users [_] (mc/distinct db "endUser" "_id" {}))
       ))
