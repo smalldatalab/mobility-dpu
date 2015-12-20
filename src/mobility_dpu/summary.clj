@@ -93,18 +93,20 @@
 
 (s/defn mobility-datapoint :- MobilityDataPoint
   [user device type date creation-datetime body]
-  (datapoint/datapoint user
-             "cornell"                                      ; namespace
-             (str "mobility-daily-" type)                   ; schema name
-              2 0                                           ; version
-             (clojure.string/lower-case device)             ; souce
-             "SENSED"                                       ; modality
-             date                                           ; time for id
-             creation-datetime                              ; creation datetime
-             (assoc body
-               :date date
-               :device (clojure.string/lower-case device))  ; body
-             )
+  (let [[major minor]
+        (map #(Integer/parseInt %) (clojure.string/split (:mobility-datapoint-version @config) #"\."))]
+    (datapoint/datapoint user
+                         "cornell"                                      ; namespace
+                         (str "mobility-daily-" type)                   ; schema name
+                         major minor                                    ; version
+                         (clojure.string/lower-case device)             ; souce
+                         "SENSED"                                       ; modality
+                         date                                           ; time for id
+                         creation-datetime                              ; creation datetime
+                         (assoc body
+                           :date date
+                           :device (clojure.string/lower-case device))  ; body
+                         ))
   )
 
 
@@ -140,7 +142,7 @@
          }
         gait
         (assoc
-          :max_gait_speed                     {:unit "m/s" :value gait}
+          :max_gait_speed                     {:unit "mps" :value gait}
           :gait_speed                         {:n_meters   (:n-meters-of-gait-speed @config)
                                                :quantile   (:quantile-of-gait-speed @config)
                                                :gait_speed gait

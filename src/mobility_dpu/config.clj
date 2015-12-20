@@ -21,6 +21,9 @@
    ; the shim sync stuff
    :shim-endpoint          "http://localhost:8083"
    :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
+
+   ; mobility datapoint version
+   :mobility-datapoint-version "2.1"
    })
 
 

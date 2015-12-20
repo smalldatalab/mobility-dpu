@@ -104,6 +104,9 @@
       {:time_not_at_home  {:unit "sec"
                            :value time-not-at-home}}
 
+      ; return nil if never been to home
+      true
+      nil
       )
 
     )

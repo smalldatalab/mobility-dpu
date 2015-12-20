@@ -113,26 +113,27 @@
     {:longest_trek                       {:unit #"km" :value s/Num},
      :active_time                        {:unit #"sec" :value s/Num},
      :walking_distance                   {:unit #"km" :value s/Num},
-     :home                               {
-                                          (s/optional-key :leave_home_time)   DateTimeSchema,
-                                          (s/optional-key :return_home_time)  DateTimeSchema,
-                                          (s/optional-key :time_not_at_home)  {:unit #"sec" :value s/Num}
-                                          }
+     :home                               (s/maybe
+                                           {
+                                            (s/optional-key :leave_home_time)   DateTimeSchema,
+                                            (s/optional-key :return_home_time)  DateTimeSchema,
+                                            (s/optional-key :time_not_at_home)  {:unit #"sec" :value s/Num}
+                                            })
      :date                               DateSchema,
      :device                             s/Str
-     (s/optional-key :max_gait_speed)    {:unit #"m/s" :value s/Num},
+     (s/optional-key :max_gait_speed)    {:unit #"mps" :value s/Num},
      (s/optional-key :gait_speed)        {:gait_speed s/Num, :quantile s/Num, :n_meters s/Num}
      :geodiameter                        {:unit #"km" :value s/Num},
      :step_count                         (s/maybe s/Num),
      :coverage                           s/Num,
-     :episodes                           [(dissoc EpisodeSchema :trace-data)]})
+     :episodes                           [s/Any]})
   )
 (def SegmentDataPoint
   (assoc DataPoint
     :body
     {:date     DateSchema
      :device   s/Str
-     :episodes [EpisodeSchema]
+     :episodes [s/Any]
      })
   )
 
@@ -148,32 +149,15 @@
     SegmentDataPoint
     ))
 
-
-
-
-
-
-
-
 (defrecord DataPointRecord [body timestamp]
   TimestampedProtocol
   (timestamp [_] timestamp)
   )
 
-
-
-
-
-
-
-
 (s/defrecord Episode [inferred-state :- State
                       start :- (s/protocol t/DateTimeProtocol)
                       end :- (s/protocol t/DateTimeProtocol)
                       trace-data :- TraceData])
-
-
-
 
 (defmulti trim (fn [main _ _]
                  (class main)
@@ -226,8 +210,6 @@
     )
   )
 
-
-
 (defprotocol DatabaseProtocol
   (query [this schema-namespace schema-name user]
     "query data point of specific schema and user")
@@ -238,7 +220,6 @@
   (users [this]
     "Return distinct users")
   )
-
 
 (defprotocol UserDataSourceProtocol
   (user [this] "Return the user name")
