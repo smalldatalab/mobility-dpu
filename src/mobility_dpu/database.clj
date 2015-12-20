@@ -8,8 +8,7 @@
             [monger.conversion :refer :all])
   (:use [mobility-dpu.config]
         [mobility-dpu.protocols])
-  (:import (org.joda.time.base AbstractInstant AbstractPartial)
-           (clojure.lang IPersistentMap IPersistentCollection)
+  (:import (clojure.lang IPersistentMap IPersistentCollection)
            (org.joda.time ReadableInstant ReadablePartial DateTimeZone)))
 
 

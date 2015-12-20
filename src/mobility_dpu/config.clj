@@ -23,7 +23,7 @@
    :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
 
    ; mobility datapoint version
-   :mobility-datapoint-version "2.1"
+   :mobility-datapoint-version "2.0"
    })
 
 
