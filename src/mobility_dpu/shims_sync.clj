@@ -5,7 +5,10 @@
         [mobility-dpu.database]
         [mobility-dpu.datapoint])
 
-  (:require [clj-http.client :as client]))
+  (:require [clj-http.client :as client]
+            [clj-time.format :as f]
+            [mobility-dpu.temporal :as temporal])
+  (:import (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
 
 (def authorizations-endpoint (str (:shim-endpoint @config) "/authorizations"))
 (def data-endpoint (str (:shim-endpoint @config) "/data"))
@@ -26,12 +29,19 @@
 
     )
   )
-(defn to-datapoint
-  "Convert data return by omh-shims to local data point"
-  [user service schema body]
+
+(defn extract-time [body]
   (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
                  (get-in body [:effective_time_frame :date_time]))
         ]
+    (temporal/dt-parser time)
+    )
+  )
+
+(defn to-datapoint
+  "Convert data return by omh-shims to local data point"
+  [user service schema body]
+  (let [time (extract-time body)]
     (datapoint user "omh" (name schema) 1 0 (name service) "SENSED" time time body)
     )
   )
@@ -39,14 +49,10 @@
 (defn to-datapoint-with-header
   "Convert data return by Shimmer to local data point"
   [user header body]
-  (let [time (or (get-in body [:effective_time_frame :time_interval :start_date_time])
-                 (get-in body [:effective_time_frame :date_time]))
+  (let [time (extract-time body)
         {:keys [name namespace version]} (get-in header [:schema_id])
         {:keys [source_name source_origin_id]} (get-in header [:acquisition_provenance])
-        _ (println header)
         [major minor] (clojure.string/split version #"\.")
-
-
         ]
     (datapoint user namespace name
                (Integer/parseInt major) (Integer/parseInt minor)

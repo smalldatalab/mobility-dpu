@@ -1,7 +1,8 @@
 (ns mobility-dpu.temporal
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
-            [schema.core :as s])
+            [schema.core :as s]
+            [clj-time.format :as f])
   (:use mobility-dpu.protocols)
   (:import (org.joda.time DateTime DateTimeZone LocalDate)
            (org.joda.time.format ISODateTimeFormat DateTimeFormat DateTimeFormatter)
@@ -10,17 +11,13 @@
 
 ; date time parser that try all the possible formats
 (defn dt-parser [dt]
-  (let [try-parse #(try (DateTime/parse %1 (.withOffsetParsed ^DateTimeFormatter %2)) (catch IllegalArgumentException _ nil))
-        ^DateTime dt (or (try-parse dt (ISODateTimeFormat/dateTime))
-                         (try-parse dt (ISODateTimeFormat/dateTimeNoMillis))
-                         (try-parse dt (DateTimeFormat/forPattern "yyyy-MM-dd'T'HH:mmZZ"))
-                         )
-
-        ]
-    (if (= "UTC" (.getID ^DateTimeZone (.getZone dt)))
-      (t/to-time-zone dt (t/time-zone-for-id "America/New_York"))
-      dt
-      )))
+  (first
+    (for [f (map #(.withOffsetParsed ^DateTimeFormatter %)
+                 [(ISODateTimeFormat/dateTime)
+                  (ISODateTimeFormat/dateTimeNoMillis)
+                  (DateTimeFormat/forPattern "yyyy-MM-dd'T'HH:mmZZ")])
+          :let [d (try (f/parse f dt) (catch Exception _ nil))]
+          :when d] d)))
 
 
 
