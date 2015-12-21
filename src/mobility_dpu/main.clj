@@ -42,7 +42,7 @@
             )
           (catch Exception e (error e)))
         )
-      (Thread/sleep (* 1000 60 5))
+      (Thread/sleep (* 1000 60 15))
       (recur))
     )
   ; Create a new thread to sync other shims sync tasks
@@ -66,7 +66,7 @@
         (Thread/sleep 5000)
         )
       ; sleep to avoid deplete the API quota
-      (Thread/sleep (* 1000 60 5))
+      (Thread/sleep (* 1000 60 60))
 
       (recur))
     )
@@ -96,7 +96,7 @@
             )
           )
         )
-      (Thread/sleep (* 1000 60 5))
+      (Thread/sleep (* 1000 60 15))
       (recur)
       )
     )
