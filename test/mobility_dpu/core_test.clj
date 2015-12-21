@@ -7,7 +7,7 @@
             [mobility-dpu.home-location :as home]
             [mobility-dpu.summary :as summary]
             [mobility-dpu.fake-db :refer [fake-db]]
-            )
+            [mobility-dpu.temporal :as temporal])
 
   (:use     [mobility-dpu.protocols]
             [mobility-dpu.android])
@@ -44,7 +44,7 @@
                         :schema_id                      {:namespace "omh",
                                                          :name      "physical-activity",
                                                          :version   {:major 1, :minor 0}},
-                        :creation_date_time             "2015-10-09T23:53:08.610Z",
+                        :creation_date_time             (temporal/dt-parser "2015-10-09T23:53:08.610Z"),
                         :creation_date_time_epoch_milli (c/to-long "2015-10-09T23:53:08.610Z")
                         :acquisition_provenance         {:source_name      "Google Fit API",
                                                          :modality         "SENSED"
