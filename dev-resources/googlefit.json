@@ -1,0 +1,24 @@
+[{
+  "header": {
+    "id": "07d34cd0-da57-4020-b651-12cfbcd8e75c",
+    "creation_date_time": "2015-12-19T09:53:21.185-08:00",
+    "acquisition_provenance": {
+      "source_name": "Google Fit API",
+      "source_origin_id": "derived:com.google.activity.segment:com.google.android.gms:LGE:Nexus 4:4b2a149e:from_sample<-derived:com.google.activity.sample:com.google.android.gms:LGE:Nexus 4:4b2a149e:detailed"
+    },
+    "schema_id": {
+      "namespace": "omh",
+      "name": "physical-activity",
+      "version": "1.0"
+    }
+  },
+  "body": {
+    "effective_time_frame": {
+      "time_interval": {
+        "start_date_time": "2015-10-09T23:53:08.610Z",
+        "end_date_time": "2015-10-10T00:05:36.067Z"
+      }
+    },
+    "activity_name": "Walking"
+  }
+}]

@@ -4,14 +4,29 @@
 
 
 (def default
-  {:filter-walking-speed   9
+  {
+   ; mobility summary config
+   :filter-walking-speed   9
    :n-meters-of-gait-speed 50
    :quantile-of-gait-speed 0.9
    :max-human-speed 7
-   :shim-endpoint          "http://ohmage-shim:8084"
+
+   ; mongodb stuff
    :mongodb                nil
-   :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
+   :dbname                 "omh"
+
+   ; where to write the log file
    :log-file               "/var/log/ohmage-dpu/clojure.log"
+
+   ; the shim sync stuff
+   :shim-endpoint          "http://ohmage-shim:8084"
+   :sync-tasks             {:fitbit ["STEPS" "ACTIVITY"]}
+
+   ; mobility datapoint version
+   :mobility-datapoint-version "2.0"
+
+   ; gmap api key
+   :gmap-geo-coding-server-key "YOUR_GMAP_API_KEY"
    })
 
 

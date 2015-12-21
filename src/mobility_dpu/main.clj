@@ -1,112 +1,125 @@
 (ns mobility-dpu.main
   (:gen-class)
-  (:require [mobility-dpu.ios]
-            [taoensso.timbre :as timbre]
+  (:require [taoensso.timbre :as timbre]
             [taoensso.timbre.appenders.core :as appenders]
-            [mobility-dpu.android]
-            [mobility-dpu.mobility :as mobility]
             [mobility-dpu.temporal :refer [dt-parser]]
-            [mobility-dpu.moves-sync :as moves]
             [mobility-dpu.shims-sync :as shims]
+            [mobility-dpu.summary :as summary]
+            [mobility-dpu.home-location :as home]
+            [clj-time.core :as t]
+            [schema.core :as s]
             )
   (:use [mobility-dpu.protocols]
-        [mobility-dpu.android]
-        [mobility-dpu.ios]
-        [mobility-dpu.database]
-        [mobility-dpu.config]
-        [aprint.core]
+        [mobility-dpu.android :only [->AndroidUserDatasource]]
+        [mobility-dpu.ios :only [->iOSUserDatasource]]
+        [mobility-dpu.moves-sync :only [->MovesUserDatasource]]
+        [mobility-dpu.database :only [mongodb]]
+        [mobility-dpu.config :only [config]]
+        [aprint.core]))
 
-        )
-
-  )
-
-; config logger
+;; config logger
 (timbre/refer-timbre)
 (timbre/merge-config!
   {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
-(def db (mongodb "omh" "dataPoint"))
+;; tracking the last update time
+(def user-source->last-update (atom {}))
+
+(defn sync-shims [db users]
+  (doseq [user users]
+    (try
+      (doseq [dp (shims/get-datapoints user (:sync-tasks @config))]
+
+        (info "Save data for " user " "
+              (get-in dp [:header :acquisition_provenance :source_name]) " "
+              (get-in dp [:header :creation_date_time]))
+        (save db dp)
+
+        )
+
+      (catch Exception e (error e)))
+    ; sleep to avoid polling service provider too fast
+    ; FIXME use a more efficient throttle function?
+    (Thread/sleep 5000)
+    )
+  )
+
+(defn sync-data-sources [db data-sources users]
+  (doseq [; run dpu for specifc users (if args are set) or all the users in the db
+          user users
+          ; functions to generate datapoints from different sources: Android, iOS, and Moves App
+          source-fn data-sources]
+    (let [source (source-fn user)
+          last-raw-data-update-time (last-update source)
+          last-process-time (@user-source->last-update  [user (source-name source)])]
+      ; only compute new data points if there are new raw data that have been uploaded
+      (when
+        (or (nil? last-raw-data-update-time)
+            (nil? last-process-time)
+            (t/after? last-raw-data-update-time last-process-time)
+            )
+        (try
+          (let [provided-home-loc (home/provided-home-location user db)]
+            (if provided-home-loc
+              (info (str "User " user " provided home location:" provided-home-loc)))
+            (let [datapoints (summary/get-datapoints
+                               (source-fn user)
+                               provided-home-loc)]
+              (doseq [datapoint datapoints]
+                (save db (s/validate MobilityDataPoint datapoint)))
+              (if (seq datapoints)
+                (info "Save data for " user
+                       (source-name source)
+                       (get-in (first datapoints) [:body :date])
+                      "-"  (get-in (last datapoints) [:body :date])
+                      ))
+              )
+
+            ; store the last update time
+            (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time)
+            )
+          (catch Exception e (error e)))
+        )
+      )
+    ))
+
+
 (defn -main
   "The application's main function"
   [& args]
-  ; Create a new thread to sync moves data
-  (future
-    (loop []
-      (doseq [user (or (seq args) (users db))]
-        (try
-          (doseq [dp (moves/get-datapoints user)]
-            (info "MOVES - Saving moves data for " user " "
-                  (get-in dp [:body :date]) " "
-                  (get-in dp [:body :device]))
-            (save db dp)
-            )
-          (catch Exception e (error e)))
+
+
+  (let [db (mongodb)
+        get-users #(or (seq args) (users db))]
+    ; Create a new thread to sync other shims sync tasks
+    (future
+      (loop []
+        (sync-shims db (get-users))
+        ; sleep to avoid deplete the API quota
+        (Thread/sleep (* 1000 60 15))
+
+        (recur))
+      )
+    ; Create a new thread to sync Moves
+    (future
+      (loop []
+        (sync-data-sources
+          db
+          [#(->MovesUserDatasource %)]
+          (get-users))
+        (recur)
         )
-      (Thread/sleep (* 1000 60 15))
-      (recur))
-    )
-  ; Create a new thread to sync other shims sync tasks
-  (future
+      )
+    ; sync Android and iOS mobility
     (loop []
-      (doseq [user (or (seq args) (users db))]
-        (try
-          (doseq [dp (shims/get-datapoints user (:sync-tasks @config))]
-
-            (info "SHIMS - Saving data for " user " "
-                  (get-in dp [:header "acquisition_provenance" "source_name"]) " "
-                  (get-in dp [:header "schema_id" "name"]) " "
-                  (get-in dp [:header "creation_date_time"]))
-            (save db dp)
-
-            )
-
-          (catch Exception e (error e)))
-        ; sleep to avoid polling service provider too fast
-        ; FIXME use a more efficient throttle function?
-        (Thread/sleep 5000)
-        )
-      ; sleep to avoid deplete the API quota
-      (Thread/sleep (* 1000 60 60))
-
-      (recur))
-    )
-
-
-  ; sync Android and iOS mobility
-  (let [user-raw-data-counts (atom {})]
-    (loop []
-      (doseq [; run dpu for specifc users (if args are set) or all the users in the db
-              user (or (seq args) (users db))
-              ; functions to generate datapoints from different sources: Android, iOS, and Moves App
-              source-fn [->AndroidUserDatasource ->iOSUserDatasource]]
-        (let [source (source-fn user db)
-              raw-data-count (count (raw-data source))]
-          ; only compute new data points if there are new raw data that have been uploaded
-          (if-not (= raw-data-count (get @user-raw-data-counts [user source-fn]))
-            (try (doseq [datapoint (mobility/get-datapoints user (source-fn user db))]
-                   (info "MOBILITY - Saving data for " user " "
-                         source-fn " "
-                         (get-in datapoint [:body :date]) " "
-                         (get-in datapoint [:body :device]))
-                   (save db datapoint))
-                 ; store number of raw data counts to check data update in the future
-                 (swap! user-raw-data-counts assoc [user source-fn] raw-data-count)
-                 (catch Exception e (error e)))
-            (info "MOBILITY - No new data for " user " " source-fn)
-            )
-          )
-        )
-      (Thread/sleep (* 1000 60 15))
+      (sync-data-sources
+        db
+        [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
+        (get-users))
       (recur)
       )
-    )
-
   )
-
-
-
-
-
+  )
 
 
 

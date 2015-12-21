@@ -1,5 +1,6 @@
 (ns mobility-dpu.hmm
-  (:require [taoensso.timbre :as timbre])
+  (:require [taoensso.timbre :as timbre]
+            [schema.core :as s])
   (:use [mobility-dpu.protocols]
         [aprint.core]))
 
@@ -58,10 +59,12 @@
 
     )
   )
-(defn hmm
+(s/defn hmm :- [State]
   "Apply Hidden Makov Model to smooth the activity samples
   See: http://en.wikipedia.org/wiki/Baum%E2%80%93Welch_algorithm"
-  [sample-seq transition-matrix first-x-prob]
+  [sample-seq :- [(s/protocol ActivitySampleProtocol)]
+   transition-matrix
+   first-x-prob]
   (if (< (count sample-seq) 2)
     (throw (Exception. "HMM can't work when the number of samples < 2"))
     (let [; observations

@@ -22,7 +22,7 @@
             count (count latest-instances)]
         (when (>= count limit)
           (let [sleep (t/in-millis (t/interval time-threshold (first latest-instances)))]
-            (info (str "Sleep " sleep " for throttle " period " " limit " " " now count:" count))
+            (debug (str "Sleep " sleep " for throttle " period " " limit " " " now count:" count))
             (Thread/sleep sleep))
           )
         (reset! instances (conj latest-instances (t/now)))

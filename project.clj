@@ -1,12 +1,12 @@
-(defproject mobility-dpu "0.3.1-SNAPSHOT"
+(defproject mobility-dpu "0.4.0-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :main ^:skip-aot mobility-dpu.main
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
-  :resource-paths ["/home/changun/Desktop/inflib.jar"]
+  :jvm-opts ["-Xmx2g" "-server"]
+  :main mobility-dpu.main
   :plugins [[lein-localrepo "0.5.3"]]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [aprint "0.1.1"]
@@ -16,6 +16,7 @@
                  [org.ocpsoft.prettytime/prettytime "3.2.7.Final"]
                  [com.novemberain/monger "2.0.1"]
                  [clj-http "1.0.1"]
-
+                 [org.apache.commons/commons-math3 "3.5"]
+                 [prismatic/schema "1.0.3"]
 
                  ])
