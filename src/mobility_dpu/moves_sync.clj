@@ -100,15 +100,32 @@
 (def date-time-format (.withOffsetParsed ^DateTimeFormatter (ISODateTimeFormat/basicDateTimeNoMillis)))
 (def date-format (ISODateTimeFormat/basicDate))
 
+(defn client [endpoint params]
+  (loop []
+    (let [{:keys [body status] :as res}
+          (request-throttle #(client/get
+                              endpoint
+                              (merge
+                                params
+                                {:as               :json
+                                 :throw-exceptions false})))]
+      (if (and (= 500 status)
+               (.contains ^String body "429 Client Error (429)"))
+       (do (Thread/sleep 60000)
+           (recur))
+       res)
 
+
+      ))
+
+  )
 
 
 (defn- get-auths
   "return the authorizations the user has"
   [user]
-  (let [body (get-in (request-throttle #(client/get authorizations-endpoint {:query-params     {"username" user}
-                                                                             :as               :json
-                                                                             :throw-exceptions false}))
+  (let [body (get-in (client authorizations-endpoint {:query-params     {"username" user}
+                                                      })
                      [:body])]
     (mapcat :auths body)
     )
@@ -118,9 +135,9 @@
 (defn get-profile
   "get the user's Moves profile"
   [user]
-  (let [profile (get-in (request-throttle #(client/get profile-endpoint {:query-params     {"username" user}
-                                                                         :as               :json
-                                                                         :throw-exceptions false}))
+  (let [profile (get-in (client profile-endpoint {:query-params     {"username" user
+                                                                     "normalize" "false"}
+                                                  })
                         [:body :body :profile])]
     (if profile
       {:first-date   (LocalDate/parse (:firstDate profile) date-format)
@@ -142,12 +159,12 @@
 
    (let [end (t/plus start (t/days 6))
          end (if (t/after? end til) til end)
-         response (request-throttle #(client/get storyline-endpoint {:query-params     {"username"  user
-                                                                                        "dateStart" start
-                                                                                        "dateEnd"   end}
-                                                                     :as               :json
-                                                                     :throw-exceptions false
-                                                                     }))
+         response (client storyline-endpoint {:query-params     {"username"  user
+                                                                 "dateStart" start
+                                                                 "dateEnd"   end
+                                                                 "normalize" "false"}
+
+                                                  })
          storylines (->> (get-in response [:body :body])
                          (map #(assoc % :zone zone))
                          (s/validate [MovesData])
@@ -177,12 +194,12 @@
 
     (let [from (t/minus to (t/days 30))
           start (if (t/before? from first-date) first-date from)
-          response (request-throttle #(client/get summary-endpoint {:query-params     {"username"  user
-                                                                                         "dateStart" start
-                                                                                         "dateEnd"   to}
-                                                                      :as               :json
-                                                                      :throw-exceptions false
-                                                                      }))
+          response (get summary-endpoint {:query-params     {"username"  user
+                                                             "dateStart" start
+                                                             "dateEnd"   to
+                                                             "normalize" "false"}
+
+                                                 })
           summaries (->> (reverse (get-in response [:body :body])))
 
           ]
