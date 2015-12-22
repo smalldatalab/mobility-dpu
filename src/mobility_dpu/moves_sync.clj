@@ -135,8 +135,7 @@
 (defn get-profile
   "get the user's Moves profile"
   [user]
-  (let [profile (get-in (client profile-endpoint {:query-params     {"username" user
-                                                                     "normalize" "false"}
+  (let [profile (get-in (client profile-endpoint {:query-params     {"username" user}
                                                   })
                         [:body :body :profile])]
     (if profile
@@ -161,8 +160,7 @@
          end (if (t/after? end til) til end)
          response (client storyline-endpoint {:query-params     {"username"  user
                                                                  "dateStart" start
-                                                                 "dateEnd"   end
-                                                                 "normalize" "false"}
+                                                                 "dateEnd"   end}
 
                                                   })
          storylines (->> (get-in response [:body :body])
@@ -196,8 +194,7 @@
           start (if (t/before? from first-date) first-date from)
           response (get summary-endpoint {:query-params     {"username"  user
                                                              "dateStart" start
-                                                             "dateEnd"   to
-                                                             "normalize" "false"}
+                                                             "dateEnd"   to}
 
                                                  })
           summaries (->> (reverse (get-in response [:body :body])))
