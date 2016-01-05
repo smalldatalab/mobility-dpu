@@ -55,7 +55,7 @@
                          purge-raw?
                          )]
 
-        (when (seq datapoints)
+        (if (seq datapoints)
           (let [dates (->>
                         datapoints
                         (map (comp :date :body))
@@ -78,10 +78,11 @@
                 (purge-raw-trace data-source remove-until)
                 )
               )
+            :success
             )
           )
         )
-      :success
+
       )
     (catch Exception e (error e)))
   )
@@ -94,18 +95,18 @@
           source-fn data-sources]
     (let [source (source-fn user)
           last-raw-data-update-time (last-update source)
-          last-process-time (@user-source->last-update  [user (source-name source)])
+          last-process-time (get @user-source->last-update  [user (source-name source)])
           purge-data? (purge-raw-data? db user)
           ]
       ; only compute new data points if there are new raw data that have been uploaded
-      (when
+      (if
         (or (nil? last-raw-data-update-time)
             (nil? last-process-time)
             (t/after? last-raw-data-update-time last-process-time)
-            (sync-one-user user source purge-data? db)
             )
-        ; store the last update time
-        (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time)
+        (when (sync-one-user user source purge-data? db)
+          ; store the last update time
+          (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time))
         )
       )
     ))

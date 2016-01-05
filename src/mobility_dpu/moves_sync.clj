@@ -192,7 +192,7 @@
 
     (let [from (t/minus to (t/days 30))
           start (if (t/before? from first-date) first-date from)
-          response (get summary-endpoint {:query-params     {"username"  user
+          response (client summary-endpoint {:query-params     {"username"  user
                                                              "dateStart" start
                                                              "dateEnd"   to}
 
