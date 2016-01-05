@@ -1,6 +1,8 @@
 (ns mobility-dpu.config
-  (:require [cheshire.core :as json]
-            [environ.core :refer [env]])
+  (:require
+            [environ.core :refer [env]]
+            [aprint.core :refer [aprint]]
+            )
   )
 
 
@@ -49,11 +51,15 @@
       )
   )
 
-; parse the config.json file or use the default configuration
+; parse the environment variable or use the default configuration
 (def config
   (delay
-    (-> default
-        (assoc-env env))
+    (let [config (-> default
+                     (assoc-env env))]
+      (aprint "Run with config:")
+      (aprint config)
+      config
+      )
 
     )
   )
