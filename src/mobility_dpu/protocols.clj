@@ -7,11 +7,12 @@
   (:import (org.joda.time LocalDate DateTimeZone)
            (org.joda.time.format ISODateTimeFormat)))
 
-(def State (s/enum :in_vehicle
-                   :on_bicycle
-                   :on_foot
-                   :still
-                   :unknown))
+(def PossibleStates [:in_vehicle
+                     :on_bicycle
+                     :on_foot
+                     :still
+                     :unknown])
+(def State (apply s/enum PossibleStates))
 
 (def Latitude s/Num)
 (def Longitude s/Num)
@@ -24,7 +25,7 @@
 
 (defprotocol ActivitySampleProtocol
   (prob-sample-given-state [this state]
-    "return P(Hidden State=s | this sample),  namely, given observing this sample, what is the probability of hidden state being s")
+    "return P(this sample | Hidden State=state ),  namely, what is the probability of observing the sample given the real hidden state is s")
   )
 
 (defprotocol TimestampedProtocol
@@ -213,12 +214,18 @@
 (defprotocol DatabaseProtocol
   (query [this schema-namespace schema-name user]
     "query data point of specific schema and user")
+  (remove-until [this ns name user date]
+    "remove data up to (including) certain date"
+    )
   (last-time [this schema-namespace schema-name user]
     "query data point of specific schema and user")
   (save [this data]
     "Save the data point. Replace the existing data point with the same id.")
   (users [this]
     "Return distinct users")
+  (purge-raw-data? [this user]
+    "Return whether the user's raw data should be purged."
+    )
   )
 
 (defprotocol UserDataSourceProtocol
@@ -227,6 +234,7 @@
   (step-supported? [this] "If the data source support the steps count")
   (extract-episodes [this])
   (last-update [this] "Return the last update time")
+  (purge-raw-trace [this until-date] "Remove the raw data until (and including) the given date")
   )
 
 

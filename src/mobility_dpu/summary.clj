@@ -109,15 +109,22 @@
                          ))
   )
 
+(s/defn hide-locaton [{:keys [trace-data] :as epi} ]
+  (-> epi
+      (assoc :trace-data (dissoc trace-data :location-trace))
+      (dissoc :cluster))
+  )
 
 (s/defn segments :- SegmentDataPoint
   [user :- s/Str
    device :- s/Str
+   hide-location? :- s/Bool
    {:keys [episodes date zone]} :- DayEpisodeGroup]
   (mobility-datapoint
     user device "segments"
     date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
-    {:episodes episodes})
+    {:episodes (map #(cond-> % hide-location?
+                             (hide-locaton)) episodes)})
 
   )
 
@@ -125,6 +132,7 @@
   [user :- s/Str
    device :- s/Str
    step-supported? :- s/Bool
+   hide-location? :- s/Bool
    {:keys [episodes date zone]} :- DayEpisodeGroup]
   (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config) )]
     (mobility-datapoint
@@ -138,7 +146,11 @@
          :step_count                              (if step-supported? (total-step-count episodes))
          :longest_trek                       {:unit "km" :value (longest-trek-in-km episodes)}
          :coverage                           (algorithms/coverage date zone episodes)
-         :episodes                           (map #(dissoc % :raw-data :trace-data) episodes)
+         :episodes                           (map (fn [epi]
+                                                    (cond-> (dissoc epi :raw-data :trace-data)
+                                                            hide-location?
+                                                            (hide-locaton)
+                                                            )) episodes)
          }
         gait
         (assoc
@@ -153,7 +165,8 @@
 
 (s/defn ^:always-validate get-datapoints :- [MobilityDataPoint]
   [source :- (s/protocol UserDataSourceProtocol)
-   provided-home-location :- (s/maybe Location)]
+   provided-home-location :- (s/maybe Location)
+   & [hide-location? :- s/Bool]]
   (let [user (user source)
         device (source-name source)
         step-supported? (step-supported? source)
@@ -169,8 +182,8 @@
         ]
     (mapcat
       (fn [day-group]
-        [(summarize user device step-supported? day-group)
-         (segments user device day-group)
+        [(p :summary (summarize user device step-supported? hide-location? day-group ))
+         (p :segment (segments user device hide-location? day-group  ))
          ]
         )
       (group-by-day episodes)

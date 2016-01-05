@@ -5,7 +5,8 @@
 
             [mobility-dpu.temporal]
             [schema.core :as s]
-            [monger.conversion :refer :all])
+            [monger.conversion :refer :all]
+            [clj-time.core :as t])
   (:use [mobility-dpu.config]
         [mobility-dpu.protocols])
   (:import (clojure.lang IPersistentMap IPersistentCollection)
@@ -28,14 +29,15 @@
 
 
 
-(def db-connection
-  (delay (-> (mg/get-db (mg/connect (:mongodb @config)) (:dbname @config)))))
+
 
 (defn mongodb
   "Create a MongoDB-backed DatabaseProtocol"
-  []
-  (let [db @db-connection
-        coll "dataPoint"]
+  ([] (let [{:keys [conn db]} (mg/connect-via-uri (@config :mongodb-uri))
+            coll "dataPoint"]
+        (mongodb db coll)
+        ))
+  ([db coll]
     (reify DatabaseProtocol
       (query [_ ns name user]
         (let [rows (mq/with-collection db coll
@@ -54,6 +56,16 @@
               (mobility-dpu.temporal/dt-parser
                 (get-in row [:header :creation_date_time])))
             ))
+        )
+
+      (remove-until [_ ns name user date]
+        (mc/remove
+          db coll
+          {"header.schema_id.name"      name
+           "header.schema_id.namespace" ns
+           :user_id                     user
+           "header.creation_date_time"  {:$lt (str (t/plus date (t/days 1)))}
+           })
         )
       (last-time [_ ns name user]
         (let [row (->> (mq/with-collection db coll
@@ -74,5 +86,6 @@
         (mc/save db coll (time->str (s/validate DataPoint data)))
         )
       (users [_] (mc/distinct db "endUser" "_id" {}))
+      (purge-raw-data? [_ user] false)
       ))
   )

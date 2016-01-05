@@ -8,7 +8,7 @@
             [mobility-dpu.home-location :as home]
             [clj-time.core :as t]
             [schema.core :as s]
-            )
+            [clj-time.coerce :as c])
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android :only [->AndroidUserDatasource]]
         [mobility-dpu.ios :only [->iOSUserDatasource]]
@@ -44,6 +44,49 @@
     )
   )
 
+(defn sync-one-user [user data-source purge-raw? db]
+  (try
+    (let [provided-home-loc (home/provided-home-location user db)]
+      (if provided-home-loc
+        (info (str "User " user " provided home location:" provided-home-loc)))
+      (let [datapoints (summary/get-datapoints
+                         data-source
+                         provided-home-loc
+                         purge-raw?
+                         )]
+
+        (when (seq datapoints)
+          (let [dates (->>
+                        datapoints
+                        (map (comp :date :body))
+                        (distinct)
+                        (sort)
+                        )]
+            (info "Save data for " user
+                  (source-name data-source)
+                  (first dates)
+                  "-"
+                  (last dates)
+                  )
+            (doseq [datapoint datapoints]
+              (save db (s/validate MobilityDataPoint datapoint)))
+
+            (if purge-raw?
+              (let [remove-until (t/minus (c/to-local-date (last dates)) (t/days 1))]
+                (info "Purge raw data for " user (source-name data-source)
+                      "up to " remove-until)
+                (purge-raw-trace data-source remove-until)
+                )
+              )
+            )
+          )
+        )
+      :success
+      )
+    (catch Exception e (error e)))
+  )
+
+
 (defn sync-data-sources [db data-sources users]
   (doseq [; run dpu for specifc users (if args are set) or all the users in the db
           user users
@@ -51,34 +94,18 @@
           source-fn data-sources]
     (let [source (source-fn user)
           last-raw-data-update-time (last-update source)
-          last-process-time (@user-source->last-update  [user (source-name source)])]
+          last-process-time (@user-source->last-update  [user (source-name source)])
+          purge-data? (purge-raw-data? db user)
+          ]
       ; only compute new data points if there are new raw data that have been uploaded
       (when
         (or (nil? last-raw-data-update-time)
             (nil? last-process-time)
             (t/after? last-raw-data-update-time last-process-time)
+            (sync-one-user user source purge-data? db)
             )
-        (try
-          (let [provided-home-loc (home/provided-home-location user db)]
-            (if provided-home-loc
-              (info (str "User " user " provided home location:" provided-home-loc)))
-            (let [datapoints (summary/get-datapoints
-                               (source-fn user)
-                               provided-home-loc)]
-              (doseq [datapoint datapoints]
-                (save db (s/validate MobilityDataPoint datapoint)))
-              (if (seq datapoints)
-                (info "Save data for " user
-                       (source-name source)
-                       (get-in (first datapoints) [:body :date])
-                      "-"  (get-in (last datapoints) [:body :date])
-                      ))
-              )
-
-            ; store the last update time
-            (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time)
-            )
-          (catch Exception e (error e)))
+        ; store the last update time
+        (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time)
         )
       )
     ))

@@ -98,7 +98,6 @@
                                    [cur]
                                    )
                                  ))
-
                              )
           location-samples (for [datapoint (filter (comp :location :body) (query db "cornell" "mobility-stream-iOS" user))]
                              (let [{:keys [accuracy horizontal_accuracy latitude longitude]} (:location (:body datapoint))]
@@ -119,17 +118,19 @@
                            )
                          )
           ]
+
       (mobility/mobility-extract-episodes activity-samples location-samples step-samples)
       )
     )
 
   ; iOS does support steps count
-
   (step-supported? [_]
     true)
   (last-update [_]
     (or (last-time db "cornell" "mobility-stream-iOS" user) (c/from-long 0))
     )
+  (purge-raw-trace [_ until]
+    (remove-until db "cornell" "mobility-stream-iOS" user until))
   )
 
 

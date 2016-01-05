@@ -72,6 +72,7 @@
   "Partition a seq of activity samples where consecutive samples with the same inferred state are partitioned into one segments"
   [segment :- [(s/protocol ActivitySampleProtocol)]]
   (let [inferred-states (hmm/hmm segment init-transition-matrix init-state-prob)
+        ; _ (aprint (map vector inferred-states segment))
         partitions (partition-by :state (map #(sorted-map :state %1 :sample %2) inferred-states segment))]
     (for [partition partitions]
       {:state            (:state (first partition))
@@ -90,9 +91,9 @@
   [activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
    steps-samples :- [StepSample]]
-  (let [act-seq (sort-by timestamp activity-samples)
-        loc-seq (sort-by timestamp location-samples)
-        step-seq (sort-by timestamp steps-samples )
+  (let [act-seq activity-samples
+        loc-seq location-samples
+        step-seq steps-samples
         ; remove the location samples that have low accuracy
         loc-seq (filter #(< (:accuracy %) 75) loc-seq)
         ; downsampling
@@ -108,42 +109,39 @@
         ;  :end END TIME
         ;  :state  THE INFFERED STATE
         ;  :activity-samples THE RAW SAMPLES}
-        partitions (mapcat (fn [segment] (hmm-partition segment)) segments)
+        partitions (mapcat (fn [segment] (p :hmm (hmm-partition segment))) segments)
         ; remove 0-length partitions
         partitions (filter #(not= (:start %) (:end %)) partitions)
 
         ]
     ; generate episodes
-    (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
-      (if p
-        (let [split (fn [trace]
-                      (->> trace
-                           (drop-while #(t/before? (timestamp %) (:start p)))
-                           (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
-                           ;(map doall)
-                           )
-                      )
-              [act-before act-after] (split act-seq)
-              [loc-before loc-after] (split loc-seq)
-              [step-before step-after] (split step-seq)
-              episdoe (->Episode (:state p)
-                                 (:start p)
-                                 (:end p)
-                                 (->TraceData
-                                   act-before
-                                   loc-before
-                                   step-before
-                                   ))
-              ]
-          (recur ps act-after loc-after step-after (conj episodes episdoe))
-          )
-        episodes
-        )
-
-
-      )
-
-
+    (p :associate-raw-traces
+       (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
+         (if p
+           (let [split (fn [trace]
+                         (->> trace
+                              (drop-while #(t/before? (timestamp %) (:start p)))
+                              (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
+                              ;(map doall)
+                              )
+                         )
+                 [act-before act-after] (split act-seq)
+                 [loc-before loc-after] (split loc-seq)
+                 [step-before step-after] (split step-seq)
+                 episdoe (->Episode (:state p)
+                                    (:start p)
+                                    (:end p)
+                                    (->TraceData
+                                      act-before
+                                      loc-before
+                                      step-before
+                                      ))
+                 ]
+             (recur ps act-after loc-after step-after (conj episodes episdoe))
+             )
+           episodes
+           )
+         ))
     )
   )
 
