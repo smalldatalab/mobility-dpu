@@ -14,11 +14,11 @@
 ## Usage
 * Config it with the following environment variables
 ```bash
-   export MONGODB_URI=mongodb://127.0.0.1/test
-   export LOG_FILE=[/path/to/log/file]
-   export GMAP_GEO_CODING_SERVER_KEY=[*google map server key*]
-   export SHIM_ENDPOINT=[*url of the shim server* e.g. http://localhost:8083]
-   export SYNC_TASKS=[*data types to sync in provider:DATA_TYPE, ... format* e.g. fitbit:STEPS,fitbit:ACTIVITY]
+   export MONGODB_URI=mongodb uri e.g. mongodb://127.0.0.1:27017/test
+   export LOG_FILE=/path/to/log/file
+   export GMAP_GEO_CODING_SERVER_KEY=google map server key
+   export SHIM_ENDPOINT=url of the shim server* e.g. http://localhost:8083
+   export SYNC_TASKS=data types to sync in provider:DATA_TYPE, ... format e.g. fitbit:STEPS,fitbit:ACTIVITY
 ```
 * Use the following command to start the DPU.
 ```bash
