@@ -163,8 +163,7 @@
            (fn merge-still [[cur next & rest-episodes]]
              (if cur
                (if (and (:cluster cur) next
-                        (or (= (:cluster cur) (:cluster next))
-                            (nil? (:cluster next)))
+                        (= (:cluster cur) (:cluster next))
                         (<= (t/in-minutes (t/interval (:end cur) (:start next))) 60))
                  (lazy-seq (merge-still (cons (merge-two cur next) rest-episodes)))
                  (cons cur (lazy-seq (merge-still (cons next rest-episodes))))
