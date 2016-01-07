@@ -2,14 +2,17 @@
   (:require [clj-http.client :as client]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
-            [mobility-dpu.datapoint :as datapoint]
-            [mobility-dpu.algorithms :as algorithms]
-            [mobility-dpu.throttle :as throttle])
+            [mobility-dpu.throttle :as throttle]
+
+            [schema.core :as s])
   (:use [mobility-dpu.protocols]
         [mobility-dpu.config]
+        [mobility-dpu.process-episode]
         [aprint.core])
   (:import (org.joda.time LocalDate DateTimeZone DateTime)
            (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
+
+
 (def request-throttle (let [t1 (throttle/create-throttle! (t/hours 1) 1400)
                             t2 (throttle/create-throttle! (t/minutes 1) 50)]
                         (fn [f]
@@ -20,25 +23,109 @@
 (def moves-shim (str (:shim-endpoint @config) "/data/moves/"))
 (def profile-endpoint (str moves-shim "profile"))
 (def storyline-endpoint (str moves-shim "storyline"))
+(def summary-endpoint (str moves-shim "summary"))
+(def location-sample-accuracy 50)
+
+
+(def MovesTimestemp #"\d{8}T\d{6}([-+]\d{4})|Z")
+(def MovesDate #"\d{8}")
+(def MovesActitivyGroup (s/enum "walking" "running" "cycling" "transport"))
+(def MovesLocation
+  {:lat s/Num, :lon s/Num})
+(def MovesTrackPoint
+  (assoc MovesLocation  :time MovesTimestemp))
+(def MovesActivity
+  {(s/optional-key :group)       MovesActitivyGroup,
+   (s/optional-key :startTime)   MovesTimestemp,
+   (s/optional-key :endTime)     MovesTimestemp,
+   (s/optional-key :steps)        s/Num,
+   ; the distance in meters
+   (s/optional-key :distance)    s/Num
+   (s/optional-key :calories) s/Num
+   :trackPoints [MovesTrackPoint],
+   ; the duration in seconds
+   :duration    s/Num,
+   :manual      s/Bool,
+   :activity    s/Str
+   s/Any s/Any
+   })
+
+(def PlaceSegment
+  {:type       #"place",
+   :startTime  MovesTimestemp,
+   :endTime    MovesTimestemp,
+   :place      {:type s/Str,
+
+                :location {:lat s/Num, :lon s/Num}
+                (s/optional-key :id) s/Num,
+                (s/optional-key :foursquareId) s/Str
+                (s/optional-key :facebookPlaceId) s/Str
+                (s/optional-key :foursquareCategoryIds) [s/Str]
+                (s/optional-key :name) s/Str
+                },
+   (s/optional-key :activities) [MovesActivity],
+   :lastUpdate MovesTimestemp})
+
+(def MovingSegment
+  {:type (s/enum "move" "off"),
+   :startTime  MovesTimestemp,
+   :endTime    MovesTimestemp,
+   (s/optional-key :activities) [MovesActivity],
+   :lastUpdate MovesTimestemp})
+
+(def Segment
+  (s/conditional
+    #(= (:type %) "move")
+    MovingSegment
+    #(= (:type %) "off")
+    MovingSegment
+    #(= (:type %) "place")
+    PlaceSegment
+    )
+  )
+
+(def MovesData
+  {:zone DateTimeZone
+   :date MovesDate
+   :summary [s/Any]
+   :segments [Segment]
+   (s/optional-key :caloriesIdle) s/Num
+   (s/optional-key :lastUpdate) MovesTimestemp
+   }
+  )
+
+
 
 
 (def date-time-format (.withOffsetParsed ^DateTimeFormatter (ISODateTimeFormat/basicDateTimeNoMillis)))
 (def date-format (ISODateTimeFormat/basicDate))
-(defn- base-datapoint [user date zone storyline]
-  {:user              user
-   :device            "Moves-App"
-   :date              date
-   :creation-datetime (if (:endTime (last storyline))
-                        (DateTime/parse (:endTime (last (:segments storyline))) date-time-format)
-                        (mobility-dpu.temporal/to-last-millis-of-day date zone))}
+
+(defn client [endpoint params]
+  (loop []
+    (let [{:keys [body status] :as res}
+          (request-throttle #(client/get
+                              endpoint
+                              (merge
+                                params
+                                {:as               :json
+                                 :throw-exceptions false})))]
+      (if (and (= 500 status)
+               (.contains ^String body "429 Client Error (429)"))
+       (do (Thread/sleep 60000)
+           (recur))
+       res)
+
+
+      ))
+
   )
+
 
 (defn- get-auths
   "return the authorizations the user has"
   [user]
-  (let [body (get-in (request-throttle #(client/get authorizations-endpoint {:query-params     {"username" user}
-                                                                             :as               :json
-                                                                             :throw-exceptions false}))
+  (let [body (get-in (client authorizations-endpoint {:query-params     {"username" user}
+                                                      })
                      [:body])]
     (mapcat :auths body)
     )
@@ -48,9 +135,8 @@
 (defn get-profile
   "get the user's Moves profile"
   [user]
-  (let [profile (get-in (request-throttle #(client/get profile-endpoint {:query-params     {"username" user}
-                                                                         :as               :json
-                                                                         :throw-exceptions false}))
+  (let [profile (get-in (client profile-endpoint {:query-params     {"username" user}
+                                                  })
                         [:body :body :profile])]
     (if profile
       {:first-date   (LocalDate/parse (:firstDate profile) date-format)
@@ -58,7 +144,7 @@
     )
   )
 
-(defn- daily-storyline-sequence
+(s/defn   daily-storyline-sequence :- [MovesData]
   "Query the storylines from the moves until the current date in the user's timezone"
   ([user] (let [{:keys [first-date current-zone] :as response} (get-profile user)]
             (if response
@@ -69,16 +155,19 @@
               )
             ))
   ([user start til zone]
+
    (let [end (t/plus start (t/days 6))
          end (if (t/after? end til) til end)
-         response (request-throttle #(client/get storyline-endpoint {:query-params     {"username"  user
-                                                                                        "dateStart" start
-                                                                                        "dateEnd"   end}
-                                                                     :as               :json
-                                                                     :throw-exceptions false
-                                                                     }))
-         storylines (get-in response [:body :body])
-         storylines (map #(assoc % :zone zone) storylines)
+         response (client storyline-endpoint {:query-params     {"username"  user
+                                                                 "dateStart" start
+                                                                 "dateEnd"   end}
+
+                                                  })
+         storylines (->> (get-in response [:body :body])
+                         (map #(assoc % :zone zone))
+                         (s/validate [MovesData])
+                         )
+
          ]
      (if (= end til)
        storylines
@@ -88,7 +177,36 @@
     )
   )
 
-;;; The following are summarizing functions
+(s/defn   reverse-daily-summary-sequence
+  "Query the Moves summaries in reverse chronolgical order (with batch size = 31 days)
+   until the first date of the user indicated in the profile"
+  ([user] (let [{:keys [first-date current-zone] :as response} (get-profile user)]
+            (if response
+              (reverse-daily-summary-sequence
+                user first-date
+                (c/to-local-date (t/to-time-zone (t/now) current-zone))
+                )
+              )
+            ))
+  ([user first-date to]
+
+    (let [from (t/minus to (t/days 30))
+          start (if (t/before? from first-date) first-date from)
+          response (client summary-endpoint {:query-params     {"username"  user
+                                                             "dateStart" start
+                                                             "dateEnd"   to}
+
+                                                 })
+          summaries (->> (reverse (get-in response [:body :body])))
+
+          ]
+      (if (= start first-date)
+        summaries
+        (concat summaries (lazy-seq
+                             (reverse-daily-summary-sequence user first-date (t/minus to (t/days 31))))))
+      )
+    )
+  )
 
 
 (def activity-mapping {"transport" :in_vehicle
@@ -96,124 +214,85 @@
                        "running"   :on_foot
                        "walking"   :on_foot})
 
-(def on-foot? #(= (get activity-mapping (:activity %)) :on_foot))
+(s/defn ^:always-validate activity->episode :- EpisodeSchema [{:keys [group startTime endTime steps distance calories trackPoints duration] :as raw-data} :- MovesActivity]
+  (let [startTime (DateTime/parse startTime date-time-format)
+        endTime (DateTime/parse endTime date-time-format)
+        location-trace (map (fn [{:keys [lat lon time]}] (->LocationSample (DateTime/parse time date-time-format) lat lon location-sample-accuracy)) trackPoints)
+        trace (->TraceData [] location-trace (if steps
+                                               [(->StepSample startTime endTime steps)]
+                                               []
+                                               ) )
+        episode (assoc (->Episode (activity-mapping group) startTime endTime trace) :raw-data raw-data)
 
-(defn- to-location-sample [{:keys [lat lon time]}]
-  (->LocationSample (if time (DateTime/parse time date-time-format))
-                    lat
-                    lon
-                    80
-                    )
+        ]
+    (cond->
+      episode
+      distance (assoc :distance (/ distance 1000.0))
+      calories (assoc :calories calories)
+      duration (assoc :duration duration)
+      ))
   )
 
-(defn- filter-and-sum [sequence] (apply + 0 (filter identity sequence)))
+(defmulti segment->episodes :type)
 
-(defn- steps [activities]
-  (filter-and-sum
-    (map :steps activities)))
+(s/defn activities->episodes :- [EpisodeSchema]
+  [activities :- [MovesActivity]]
+  (->>
+    activities
+    (filter #(and (:group %) (:startTime %) (:endTime %)))
+    (map activity->episode))
+  )
+(s/defmethod ^:always-validate segment->episodes "place" :- [EpisodeSchema]
 
-(defn- active-distance [activities]
-  (/ (filter-and-sum
-       (map :distance
-            (filter on-foot? activities)))
-     1000))
+   [{:keys [startTime endTime place activities] :as raw-data} :- PlaceSegment]
+     (let [startTime (DateTime/parse startTime date-time-format)
+       endTime (DateTime/parse endTime date-time-format)
+       {:keys [lon lat]} (:location place)
+       trace (->TraceData [] [(->LocationSample startTime lat lon location-sample-accuracy)
+                              (->LocationSample endTime lat lon location-sample-accuracy)
+                              ] [])]
+   (cons (assoc (->Episode :still startTime endTime trace) :raw-data raw-data)
+         (activities->episodes activities)))
+             )
 
-(defn- longest-trek-distance [activities]
-  (->> (filter on-foot? activities)
-       (filter :distance)
-       (map :distance)
-       (apply max 0)
-       (* 0.001)
-       )
-)
-(defn- active-duration [activities] (filter-and-sum
-                                      (map :duration
-                                           (filter on-foot? activities))))
-(defn- geodiameter [segments]
-  (let [locs (map to-location-sample (filter identity (map (comp :location :place) segments)))]
-    (algorithms/geodiameter-in-km locs)
-    ))
+(s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
+   [{:keys [activities]} :- MovingSegment]
+             (activities->episodes activities))
 
-(defn- infer-home [segments possible-home-location]
-  (let [place-segments (filter (comp :location :place) segments)
-        episodes (map (fn [{:keys [startTime endTime place]}]
-                        {:start    (DateTime/parse startTime date-time-format)
-                         :end      (DateTime/parse endTime date-time-format)
-                         :location (to-location-sample (:location place))}
-                        ) place-segments)
-        ]
-    (if-let [episodes (seq episodes)]
-      (algorithms/infer-home episodes possible-home-location)
-      )))
+(s/defmethod ^:always-validate segment->episodes "off" :- [EpisodeSchema]
+             [{:keys [activities]} :- MovingSegment]
+             (activities->episodes activities))
 
-(defn- gait-speed [activities]
-  (let [traces (map :trackPoints activities)
-        location-traces (for [trace traces]
-                          (map to-location-sample trace)
-                          )
-        location-traces (filter seq location-traces)
-        ]
-    (if-let [location-traces (seq location-traces)]
-      (algorithms/x-quantile-n-meter-gait-speed
-        location-traces
-        (:quantile-of-gait-speed @config)
-        (:n-meters-of-gait-speed @config))
+
+(s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
+  [user :- s/Str]
+  (if ((into #{} (get-auths user)) "moves")
+    (->> (daily-storyline-sequence user)
+         (mapcat :segments)
+         (mapcat segment->episodes)
+
+         (group-by #(select-keys % [:start :inferred-state]))
+         (map (comp last second))
+         (sort-by :start)
+         ))
+  )
+
+(defrecord MovesUserDatasource [user]
+  UserDataSourceProtocol
+  (source-name [_] "Moves-App")
+  (user [_] user)
+  (extract-episodes [_]
+    (moves-extract-episodes user))
+  (step-supported? [_]
+    true)
+  (last-update [_]
+    (if-let [update-time (:lastUpdate (first (filter :lastUpdate (reverse-daily-summary-sequence user))))]
+      (DateTime/parse update-time date-time-format)
       )
     )
   )
 
-(defn- coverage [date zone segments]
-  (let [episodes (map (fn [{:keys [startTime endTime] :as segment}]
-                        {:start (DateTime/parse startTime date-time-format)
-                         :end   (DateTime/parse endTime date-time-format)}
-                        ) segments)
-        ]
-    (algorithms/coverage date zone episodes)
-    )
-  )
 
-
-(defn- summarize [user date zone storyline]
-  (let [daily-segments (:segments storyline)
-        activities (filter on-foot? (mapcat :activities daily-segments))]
-    (datapoint/summary-datapoint
-      (merge (base-datapoint user date zone storyline)
-             {:geodiameter-in-km              (geodiameter daily-segments)
-              :walking-distance-in-km         (active-distance activities)
-              :longest-trek-in-km             (longest-trek-distance activities)
-              :active-time-in-seconds         (active-duration activities)
-              :steps                          (steps activities)
-              :gait-speed-in-meter-per-second (gait-speed activities)
-              :leave-return-home              (infer-home daily-segments nil)
-              :coverage                       (coverage date zone daily-segments)
-              })
-      )
-    ))
-
-(defn segments-datapoint [user date zone storyline]
-  (mobility-dpu.datapoint/segments-datapoint
-    (assoc (base-datapoint user date zone storyline)
-      :body storyline))
-  )
-
-
-
-(defn get-datapoints
-  ([user] (if (some #(= % "moves") (get-auths user))
-            (get-datapoints user (daily-storyline-sequence user))))
-  ([user [{:keys [date zone segments] :as storyline} & rest]]
-   (if storyline
-     (if (seq segments)
-       (let [date (LocalDate/parse date date-format)]
-         (concat
-           [(segments-datapoint user date zone storyline)
-            (summarize user date zone storyline)]
-           (lazy-seq (get-datapoints user rest))
-           )
-         )
-       (lazy-seq (get-datapoints user rest))
-       )
-     )))
 
 
 
