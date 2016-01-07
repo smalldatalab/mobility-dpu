@@ -170,7 +170,7 @@
                  )
                ))]
 
-       (->> (filter (comp #{:still} :inferred-state) episodes)
+       (->> (filter (comp #{:still} :inferred-state) episodes) 
             merge-still
             (concat (remove (comp #{:still} :inferred-state) episodes))
             (sort-by :start)
