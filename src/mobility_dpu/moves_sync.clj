@@ -265,10 +265,12 @@
              [{:keys [activities]} :- MovingSegment]
              (activities->episodes activities))
 
+(defn auth? [user]
+  ((into #{} (get-auths user)) "moves"))
 
 (s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
   [user :- s/Str]
-  (if ((into #{} (get-auths user)) "moves")
+  (if (auth? user)
     (->> (daily-storyline-sequence user)
          (mapcat :segments)
          (mapcat segment->episodes)
@@ -288,9 +290,11 @@
   (step-supported? [_]
     true)
   (last-update [_]
-    (if-let [update-time (:lastUpdate (first (filter :lastUpdate (reverse-daily-summary-sequence user))))]
-      (DateTime/parse update-time date-time-format)
-      )
+    (if (auth? user)
+      (if-let [update-time (:lastUpdate (first (filter :lastUpdate (reverse-daily-summary-sequence user))))]
+        (DateTime/parse update-time date-time-format)
+        ))
+
     )
   )
 
