@@ -10,14 +10,14 @@
             [mobility-dpu.temporal :as temporal])
   (:import (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
 
-(def authorizations-endpoint (str (:shim-endpoint @config) "/authorizations"))
-(def data-endpoint (str (:shim-endpoint @config) "/data"))
+(def authorizations-endpoint (delay (str (:shim-endpoint @config) "/authorizations")))
+(def data-endpoint (delay (str (:shim-endpoint @config) "/data")))
 
 
 (defn get-available-endpoints
   "return service/endpoints that the user has authorize"
   [user sync-tasks]
-  (let [body (get-in (client/get authorizations-endpoint
+  (let [body (get-in (client/get @authorizations-endpoint
                                  {:query-params     {"username" user}
                                   :as               :json
                                   :throw-exceptions false})
@@ -67,7 +67,7 @@
   "Send request to shims server to get the NORMALIZED data points.
   Return nil if the endpoint does not support normalization"
   [user service endpoint]
-  (let [ret (client/get (str data-endpoint "/" (name service) "/" (name endpoint))
+  (let [ret (client/get (str @data-endpoint "/" (name service) "/" (name endpoint))
                         {:query-params     {"username"  user
                                             "normalize" "true"}
                          :as               :json

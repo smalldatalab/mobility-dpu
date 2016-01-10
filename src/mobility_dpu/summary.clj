@@ -128,6 +128,7 @@
 
   )
 
+
 (s/defn  summarize :- SummaryDataPoint
   [user :- s/Str
    device :- s/Str
@@ -151,6 +152,14 @@
                                                             hide-location?
                                                             (hide-locaton)
                                                             )) episodes)
+
+         ;; for compaitability with the old format
+         :geodiameter-in-km              (geodiameter episodes)
+         :walking-distance-in-km         (walking-distance-in-km episodes)
+         :longest-trek-in-km             (longest-trek-in-km episodes)
+         :active-time-in-seconds         (active-time-in-seconds episodes)
+         :steps                          (if step-supported? (total-step-count episodes))
+         :gait-speed-in-meter-per-second gait
          }
         gait
         (assoc

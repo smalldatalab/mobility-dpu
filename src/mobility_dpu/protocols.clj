@@ -127,7 +127,16 @@
      :geodiameter                        {:unit #"km" :value s/Num},
      :step_count                         (s/maybe s/Num),
      :coverage                           s/Num,
-     :episodes                           [s/Any]})
+     :episodes                           [s/Any]
+
+     ;; for backward compatibility
+     :geodiameter-in-km              s/Num
+     :walking-distance-in-km         s/Num
+     :longest-trek-in-km             s/Num
+     :active-time-in-seconds         s/Num
+     :steps                          (s/maybe s/Num)
+     :gait-speed-in-meter-per-second (s/maybe s/Num)
+     })
   )
 (def SegmentDataPoint
   (assoc DataPoint

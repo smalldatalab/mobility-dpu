@@ -19,11 +19,11 @@
                           (t1 #(t2 f))
                           )
                         ))
-(def authorizations-endpoint (str (:shim-endpoint @config) "/authorizations"))
-(def moves-shim (str (:shim-endpoint @config) "/data/moves/"))
-(def profile-endpoint (str moves-shim "profile"))
-(def storyline-endpoint (str moves-shim "storyline"))
-(def summary-endpoint (str moves-shim "summary"))
+(def authorizations-endpoint (delay (str (:shim-endpoint @config) "/authorizations")))
+(def moves-shim (delay (str (:shim-endpoint @config) "/data/moves/")))
+(def profile-endpoint (delay (str @moves-shim "profile")))
+(def storyline-endpoint (delay (str @moves-shim "storyline")))
+(def summary-endpoint (delay (str @moves-shim "summary")))
 (def location-sample-accuracy 50)
 
 
@@ -124,7 +124,7 @@
 (defn- get-auths
   "return the authorizations the user has"
   [user]
-  (let [body (get-in (client authorizations-endpoint {:query-params     {"username" user}
+  (let [body (get-in (client @authorizations-endpoint {:query-params     {"username" user}
                                                       })
                      [:body])]
     (mapcat :auths body)
@@ -135,7 +135,8 @@
 (defn get-profile
   "get the user's Moves profile"
   [user]
-  (let [profile (get-in (client profile-endpoint {:query-params     {"username" user}
+  (let [profile (get-in (client @profile-endpoint {:query-params     {"username" user
+                                                                     "normalize" "false"}
                                                   })
                         [:body :body :profile])]
     (if profile
@@ -158,9 +159,10 @@
 
    (let [end (t/plus start (t/days 6))
          end (if (t/after? end til) til end)
-         response (client storyline-endpoint {:query-params     {"username"  user
+         response (client @storyline-endpoint {:query-params     {"username"  user
                                                                  "dateStart" start
-                                                                 "dateEnd"   end}
+                                                                 "dateEnd"   end
+                                                                 "normalize" "false"}
 
                                                   })
          storylines (->> (get-in response [:body :body])
@@ -192,13 +194,13 @@
 
     (let [from (t/minus to (t/days 30))
           start (if (t/before? from first-date) first-date from)
-          response (client summary-endpoint {:query-params     {"username"  user
-                                                             "dateStart" start
-                                                             "dateEnd"   to}
+          response (client @summary-endpoint {:query-params     {"username"  user
+                                                                "dateStart" start
+                                                                "dateEnd"   to
+                                                                "normalize" "false"}
 
                                                  })
           summaries (->> (reverse (get-in response [:body :body])))
-
           ]
       (if (= start first-date)
         summaries

@@ -56,7 +56,7 @@
         ]
     (mc/remove db "testDataPoint")
     (doseq [dp data]
-      (mc/insert db "testDataPoint" (assoc dp :user_id "test"))
+      (mc/save db "testDataPoint" (assoc dp :user_id "test"))
       )
     (database/mongodb db "testDataPoint")
     )

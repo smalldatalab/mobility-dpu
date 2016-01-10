@@ -19,8 +19,7 @@
 
 ;; config logger
 (timbre/refer-timbre)
-(timbre/merge-config!
-  {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
+
 
 ;; tracking the last update time
 (def user-source->last-update (atom {}))
@@ -116,8 +115,18 @@
   "The application's main function"
   [& args]
 
-
-  (let [db (mongodb)
+  (timbre/merge-config!
+    {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
+  (let [db (loop []
+             (if-let [db (try (mongodb)
+                          (catch Exception _
+                            (info "Waiting for mongodb" (@config :mongodb-uri))
+                            (Thread/sleep 1000)
+                            nil
+                            ))]
+               db
+               (recur)
+               ))
         get-users #(or (seq args) (users db))]
     ; Create a new thread to sync other shims sync tasks
     (future

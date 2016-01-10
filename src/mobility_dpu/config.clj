@@ -1,9 +1,12 @@
 (ns mobility-dpu.config
   (:require
-            [environ.core :refer [env]]
-            [aprint.core :refer [aprint]]
-            )
+    [environ.core :refer [env]]
+    [aprint.core :refer [aprint]]
+    [taoensso.timbre :as timbre])
   )
+
+(timbre/refer-timbre)
+
 
 
 (def default
@@ -56,8 +59,7 @@
   (delay
     (let [config (-> default
                      (assoc-env env))]
-      (aprint "Run with config:")
-      (aprint config)
+      (info "Run with config:" config)
       config
       )
 
