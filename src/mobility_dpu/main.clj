@@ -117,6 +117,8 @@
 
   (timbre/merge-config!
     {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
+
+  (info "Run with config:" @config)
   (let [db (loop []
              (if-let [db (try (mongodb)
                           (catch Exception _
@@ -131,28 +133,43 @@
     ; Create a new thread to sync other shims sync tasks
     (future
       (loop []
-        (sync-shims db (get-users))
-        ; sleep to avoid deplete the API quota
-        (Thread/sleep (* 1000 60 15))
+        (try
+          (sync-shims db (get-users))
+          ; sleep to avoid deplete the API quota
+          (Thread/sleep (* 1000 60 15))
 
+          (catch Exception e
+            (Thread/sleep 1000)
+            (warn e)
+            ))
         (recur))
       )
     ; Create a new thread to sync Moves
     (future
       (loop []
-        (sync-data-sources
-          db
-          [#(->MovesUserDatasource %)]
-          (get-users))
+        (try
+          (sync-data-sources
+            db
+            [#(->MovesUserDatasource %)]
+            (get-users))
+          (catch Exception e
+            (Thread/sleep 1000)
+            (warn e)
+            ))
         (recur)
         )
       )
     ; sync Android and iOS mobility
     (loop []
-      (sync-data-sources
-        db
-        [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
-        (get-users))
+      (try
+        (sync-data-sources
+          db
+          [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
+          (get-users))
+        (catch Exception e
+          (Thread/sleep 1000)
+          (warn e)
+          ))
       (recur)
       )
   )
