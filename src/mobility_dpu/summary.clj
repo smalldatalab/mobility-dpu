@@ -48,7 +48,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1) ) )
+       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1)))
        (map episode-distance)
        (apply + 0)
        )
@@ -59,7 +59,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1) ) )
+       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1)))
        (map episode-distance)
        (apply max 0)
        )
@@ -82,12 +82,11 @@
   (algorithms/x-quantile-n-meter-gait-speed
     (->> episodes
          (filter #(= (:inferred-state %) :on_foot))
-         (map  (comp :location-trace :trace-data))
+         (map (comp :location-trace :trace-data))
          (filter seq)
          )
-     quantile
-     n-meter)
-
+    quantile
+    n-meter)
 
   )
 
@@ -96,20 +95,20 @@
   (let [[major minor]
         (map #(Integer/parseInt %) (clojure.string/split (:mobility-datapoint-version @config) #"\."))]
     (datapoint/datapoint user
-                         "cornell"                                      ; namespace
-                         (str "mobility-daily-" type)                   ; schema name
-                         major minor                                    ; version
-                         (clojure.string/lower-case device)             ; souce
-                         "SENSED"                                       ; modality
-                         date                                           ; time for id
-                         creation-datetime                              ; creation datetime
+                         "cornell"                          ; namespace
+                         (str "mobility-daily-" type)       ; schema name
+                         major minor                        ; version
+                         (clojure.string/lower-case device) ; souce
+                         "SENSED"                           ; modality
+                         date                               ; time for id
+                         creation-datetime                  ; creation datetime
                          (assoc body
                            :date date
-                           :device (clojure.string/lower-case device))  ; body
+                           :device (clojure.string/lower-case device)) ; body
                          ))
   )
 
-(s/defn hide-locaton [{:keys [trace-data] :as epi} ]
+(s/defn hide-locaton [{:keys [trace-data] :as epi}]
   (-> epi
       (assoc :trace-data (dissoc trace-data :location-trace))
       (dissoc :cluster))
@@ -129,45 +128,51 @@
   )
 
 
-(s/defn  summarize :- SummaryDataPoint
+(s/defn summarize :- SummaryDataPoint
   [user :- s/Str
    device :- s/Str
    step-supported? :- s/Bool
    hide-location? :- s/Bool
    {:keys [episodes date zone]} :- DayEpisodeGroup]
-  (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config) )]
+  (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config))
+        body (cond->
+               {:home             (infer-home episodes)
+                :geodiameter      {:unit "km", :value (geodiameter episodes)}
+                :walking_distance {:unit "km", :value (walking-distance-in-km episodes)}
+                :active_time      {:unit "sec" :value (active-time-in-seconds episodes)}
+                :step_count       (if step-supported? (total-step-count episodes))
+                :longest_trek     {:unit "km" :value (longest-trek-in-km episodes)}
+                :coverage         (algorithms/coverage date zone episodes)
+                :episodes         (map (fn [epi]
+                                         (cond-> (dissoc epi :raw-data :trace-data)
+                                                 hide-location?
+                                                 (hide-locaton)
+                                                 )) episodes)
+
+                }
+               gait
+               (assoc
+                 :max_gait_speed {:unit "mps" :value gait}
+                 :gait_speed {:n_meters   (:n-meters-of-gait-speed @config)
+                              :quantile   (:quantile-of-gait-speed @config)
+                              :gait_speed gait
+                              }))
+        body (assoc body
+               ;; for backward-compaitability with the old format
+               :geodiameter_in_km (:value (:geodiameter body))
+               :walking_distance_in_km (:value (:walking_distance body))
+               :active_time_in_seconds (:value (:active_time body))
+               :steps (:step_count body)
+               :max_gait_speed_in_meter_per_second (:value (:max_gait_speed body))
+               :time_not_at_home_in_seconds (:value (:time_not_at_home (:home body)))
+               :leave_home_time (:leave_home_time (:home body))
+               :return_home_time (:return_home_time (:home body))
+               )
+        ]
     (mobility-datapoint
       user device "summary"
       date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
-      (cond->
-        {:home                               (infer-home episodes)
-         :geodiameter                        {:unit "km", :value  (geodiameter episodes)}
-         :walking_distance                   {:unit "km", :value  (walking-distance-in-km episodes)}
-         :active_time                        {:unit "sec" :value (active-time-in-seconds episodes)}
-         :step_count                              (if step-supported? (total-step-count episodes))
-         :longest_trek                       {:unit "km" :value (longest-trek-in-km episodes)}
-         :coverage                           (algorithms/coverage date zone episodes)
-         :episodes                           (map (fn [epi]
-                                                    (cond-> (dissoc epi :raw-data :trace-data)
-                                                            hide-location?
-                                                            (hide-locaton)
-                                                            )) episodes)
-
-         ;; for compaitability with the old format
-         :geodiameter-in-km              (geodiameter episodes)
-         :walking-distance-in-km         (walking-distance-in-km episodes)
-         :longest-trek-in-km             (longest-trek-in-km episodes)
-         :active-time-in-seconds         (active-time-in-seconds episodes)
-         :steps                          (if step-supported? (total-step-count episodes))
-         :gait-speed-in-meter-per-second gait
-         }
-        gait
-        (assoc
-          :max_gait_speed                     {:unit "mps" :value gait}
-          :gait_speed                         {:n_meters   (:n-meters-of-gait-speed @config)
-                                               :quantile   (:quantile-of-gait-speed @config)
-                                               :gait_speed gait
-                                               }))
+      body
 
       )))
 
@@ -191,8 +196,8 @@
         ]
     (mapcat
       (fn [day-group]
-        [(p :summary (summarize user device step-supported? hide-location? day-group ))
-         (p :segment (segments user device hide-location? day-group  ))
+        [(p :summary (summarize user device step-supported? hide-location? day-group))
+         (p :segment (segments user device hide-location? day-group))
          ]
         )
       (group-by-day episodes)

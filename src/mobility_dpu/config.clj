@@ -59,7 +59,6 @@
   (delay
     (let [config (-> default
                      (assoc-env env))]
-      (info "Run with config:" config)
       config
       )
 

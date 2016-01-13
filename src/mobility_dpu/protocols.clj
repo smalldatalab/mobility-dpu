@@ -130,12 +130,14 @@
      :episodes                           [s/Any]
 
      ;; for backward compatibility
-     :geodiameter-in-km              s/Num
-     :walking-distance-in-km         s/Num
-     :longest-trek-in-km             s/Num
-     :active-time-in-seconds         s/Num
+     :geodiameter_in_km              s/Num
+     :walking_distance_in_km         s/Num
+     :active_time_in_seconds         s/Num
      :steps                          (s/maybe s/Num)
-     :gait-speed-in-meter-per-second (s/maybe s/Num)
+     :max_gait_speed_in_meter_per_second (s/maybe s/Num)
+     :time_not_at_home_in_seconds (s/maybe s/Num)
+     :leave_home_time (s/maybe DateTimeSchema)
+     :return_home_time (s/maybe DateTimeSchema)
      })
   )
 (def SegmentDataPoint
