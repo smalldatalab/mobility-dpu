@@ -109,11 +109,7 @@
                          ))
   )
 
-(s/defn hide-locaton [{:keys [trace-data] :as epi}]
-  (-> epi
-      (assoc :trace-data (dissoc trace-data :location-trace))
-      (dissoc :cluster))
-  )
+
 
 
 (s/defn summarize :- SummaryDataPoint

@@ -32,7 +32,7 @@
         (info "Save data for " user " "
               (get-in dp [:header :acquisition_provenance :source_name]) " "
               (get-in dp [:header :creation_date_time]))
-        (p :save (save db dp))
+        (save db dp)
 
         )
 
@@ -45,43 +45,45 @@
 
 (defn sync-one-user [user data-source purge-raw? db]
   (try
-    (let [provided-home-loc (home/provided-home-location user db)]
+    (let [start-time (t/now)
+          provided-home-loc (home/provided-home-location user db)]
       (if provided-home-loc
         (info (str "User " user " provided home location:" provided-home-loc)))
-      (let [datapoints (summary/get-datapoints
-                         data-source
-                         provided-home-loc
-                         purge-raw?
-                         )]
+        (let [datapoints (summary/get-datapoints
+                           data-source
+                           provided-home-loc
+                           purge-raw?
+                           )]
 
-        (if (seq datapoints)
-          (let [dates (->>
-                        datapoints
-                        (map (comp :date :body))
-                        (distinct)
-                        (sort)
-                        )]
-            (info "Save data for " user
-                  (source-name data-source)
-                  (first dates)
-                  "-"
-                  (last dates)
-                  )
-            (doseq [datapoint datapoints]
-              (save db (s/validate MobilityDataPoint datapoint)))
-
-            (if purge-raw?
-              (let [remove-until (t/minus (c/to-local-date (last dates)) (t/days 1))]
-                (info "Purge raw data for " user (source-name data-source)
-                      "up to " remove-until)
-                (purge-raw-trace data-source remove-until)
+          (if (seq datapoints)
+            (let [dates (->>
+                          datapoints
+                          (map (comp :date :body))
+                          (distinct)
+                          (sort)
+                          )]
+              (doseq [datapoint datapoints]
+                (p :save (save db (s/validate MobilityDataPoint datapoint)))
                 )
+              (info "Save data for " user
+                    (source-name data-source)
+                    (first dates)
+                    "-"
+                    (last dates)
+                    "Elapsed time"
+                    (str (t/in-seconds (t/interval start-time (t/now))) "s")
+                    )
+              (if purge-raw?
+                (let [remove-until (t/minus (c/to-local-date (last dates)) (t/days 1))]
+                  (info "Purge raw data for " user (source-name data-source)
+                        "up to " remove-until)
+                  (purge-raw-trace data-source remove-until)
+                  )
+                )
+              :success
               )
-            :success
             )
           )
-        )
-
       )
     (catch Exception e (error e)))
   )
@@ -162,11 +164,10 @@
     ; sync Android and iOS mobility
     (loop []
       (try
-        (profile :info :sync-mobility
-                 (sync-data-sources
-                   db
-                   [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
-                   (get-users)))
+        (sync-data-sources
+          db
+          [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
+          (get-users))
         (catch Exception e
           (Thread/sleep 1000)
           (warn e)
