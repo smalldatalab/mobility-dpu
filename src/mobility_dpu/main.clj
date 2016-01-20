@@ -47,7 +47,6 @@
   (try
     (let [start-time (t/now)
           provided-home-loc (home/provided-home-location user db)]
-      (if provided-home-loc
 
         (let [datapoints (summary/get-datapoints
                            data-source
@@ -65,7 +64,8 @@
               (doseq [datapoint datapoints]
                 (p :save (save db (s/validate MobilityDataPoint datapoint)))
                 )
-              (info (str "User " user " provided home location:" provided-home-loc)))
+              (if provided-home-loc
+                (info (str "User " user " provided home location:" provided-home-loc)))
               (info "Save data for " user
                     (source-name data-source)
                     (first dates)
