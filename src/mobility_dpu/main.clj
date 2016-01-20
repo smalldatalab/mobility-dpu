@@ -32,7 +32,7 @@
         (info "Save data for " user " "
               (get-in dp [:header :acquisition_provenance :source_name]) " "
               (get-in dp [:header :creation_date_time]))
-        (save db dp)
+        (p :save (save db dp))
 
         )
 
@@ -162,10 +162,11 @@
     ; sync Android and iOS mobility
     (loop []
       (try
-        (sync-data-sources
-          db
-          [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
-          (get-users))
+        (profile :info :sync-mobility
+                 (sync-data-sources
+                   db
+                   [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
+                   (get-users)))
         (catch Exception e
           (Thread/sleep 1000)
           (warn e)

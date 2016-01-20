@@ -121,6 +121,7 @@
                                             (s/optional-key :time_not_at_home)  {:unit #"sec" :value s/Num}
                                             })
      :date                               DateSchema,
+     :zone                               s/Str              ; timezone
      :device                             s/Str
      (s/optional-key :max_gait_speed)    {:unit #"mps" :value s/Num},
      (s/optional-key :gait_speed)        {:gait_speed s/Num, :quantile s/Num, :n_meters s/Num}

@@ -13,7 +13,7 @@
                                "-Dsync.tasks=test2:type1,test1:type2,test2:type3"
                                ]
                     }}
-  :jvm-opts ["-Xmx1500m" "-server"]
+  :jvm-opts ["-Xmx512m" "-server"]
   :main mobility-dpu.main
   :plugins [[lein-localrepo "0.5.3"]
             [lein-environ "1.0.1"]]

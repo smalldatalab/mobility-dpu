@@ -91,7 +91,7 @@
   )
 
 (s/defn mobility-datapoint :- MobilityDataPoint
-  [user device type date creation-datetime body]
+  [user device type date zone creation-datetime body]
   (let [[major minor]
         (map #(Integer/parseInt %) (clojure.string/split (:mobility-datapoint-version @config) #"\."))]
     (datapoint/datapoint user
@@ -104,6 +104,7 @@
                          creation-datetime                  ; creation datetime
                          (assoc body
                            :date date
+                           :zone (str zone)
                            :device (clojure.string/lower-case device)) ; body
                          ))
   )
@@ -112,19 +113,6 @@
   (-> epi
       (assoc :trace-data (dissoc trace-data :location-trace))
       (dissoc :cluster))
-  )
-
-(s/defn segments :- SegmentDataPoint
-  [user :- s/Str
-   device :- s/Str
-   hide-location? :- s/Bool
-   {:keys [episodes date zone]} :- DayEpisodeGroup]
-  (mobility-datapoint
-    user device "segments"
-    date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
-    {:episodes (map #(cond-> % hide-location?
-                             (hide-locaton)) episodes)})
-
   )
 
 
@@ -136,7 +124,8 @@
    {:keys [episodes date zone]} :- DayEpisodeGroup]
   (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config))
         body (cond->
-               {:home             (infer-home episodes)
+               {
+                :home             (infer-home episodes)
                 :geodiameter      {:unit "km", :value (geodiameter episodes)}
                 :walking_distance {:unit "km", :value (walking-distance-in-km episodes)}
                 :active_time      {:unit "sec" :value (active-time-in-seconds episodes)}
@@ -144,10 +133,21 @@
                 :longest_trek     {:unit "km" :value (longest-trek-in-km episodes)}
                 :coverage         (algorithms/coverage date zone episodes)
                 :episodes         (map (fn [epi]
-                                         (cond-> (dissoc epi :raw-data :trace-data)
-                                                 hide-location?
-                                                 (hide-locaton)
-                                                 )) episodes)
+                                         (let [locations
+                                               (map
+                                                 #(vector (:latitude %) (:longitude %) (:accuracy %) (:timestamp %))
+                                                 (-> epi
+                                                     (:trace-data)
+                                                     (:location-trace)))]
+                                           (cond-> (dissoc epi :raw-data :trace-data)
+                                                   (and (not= (:inferred-state epi) :still)
+                                                        (not hide-location?))
+                                                   (assoc :locations locations)
+                                                   hide-location?
+                                                   (dissoc :cluster)
+                                                   )
+                                           )
+                                         ) episodes)
 
                 }
                gait
@@ -171,7 +171,7 @@
         ]
     (mobility-datapoint
       user device "summary"
-      date (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
+      date zone (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
       body
 
       )))
@@ -197,7 +197,6 @@
     (mapcat
       (fn [day-group]
         [(p :summary (summarize user device step-supported? hide-location? day-group))
-         (p :segment (segments user device hide-location? day-group))
          ]
         )
       (group-by-day episodes)

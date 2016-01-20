@@ -91,9 +91,9 @@
   [activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
    steps-samples :- [StepSample]]
-  (let [act-seq (sort-by timestamp activity-samples)
-        loc-seq (sort-by timestamp location-samples)
-        step-seq (sort-by timestamp steps-samples)
+  (let [act-seq activity-samples
+        loc-seq location-samples
+        step-seq steps-samples
         ; remove the location samples that have low accuracy
         loc-seq (filter #(< (:accuracy %) 75) loc-seq)
         ; downsampling
