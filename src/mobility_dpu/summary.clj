@@ -37,7 +37,7 @@
 (defn episode-distance [episode]
   (or (:distance episode)
       (->
-        (:location-trace (:trace-data episode))
+        (:locations episode)
         (spatial/kalman-filter (:filter-walking-speed @config) 3000)
         (spatial/trace-distance (:max-human-speed @config))
         ))
@@ -48,7 +48,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1)))
+       (filter #(or (:distance %) (> (count (:locations %)) 1)))
        (map episode-distance)
        (apply + 0)
        )
@@ -59,7 +59,7 @@
   [episodes :- [EpisodeSchema]]
   (->> episodes
        (filter #(= (:inferred-state %) :on_foot))
-       (filter #(or (:distance %) (> (count (:location-trace (:trace-data %))) 1)))
+       (filter #(or (:distance %) (> (count (:locations %)) 1)))
        (map episode-distance)
        (apply max 0)
        )
@@ -68,7 +68,7 @@
 (defn- total-step-count
   "Return the total number of step count in the given segments"
   [episodes]
-  (apply + 0 (->> (mapcat #(:step-trace (:trace-data %)) episodes)
+  (apply + 0 (->> (mapcat #(:steps %) episodes)
                   (map :step-count)))
   )
 (defn- infer-home [still-episodes]
@@ -82,7 +82,7 @@
   (algorithms/x-quantile-n-meter-gait-speed
     (->> episodes
          (filter #(= (:inferred-state %) :on_foot))
-         (map (comp :location-trace :trace-data))
+         (map :locations)
          (filter seq)
          )
     quantile
@@ -112,12 +112,14 @@
 
 
 
+
+
 (s/defn summarize :- SummaryDataPoint
   [user :- s/Str
    device :- s/Str
    step-supported? :- s/Bool
-   hide-location? :- s/Bool
-   {:keys [episodes date zone]} :- DayEpisodeGroup]
+   {:keys [episodes date zone]} :- DayEpisodeGroup
+   hide-location? :- s/Bool]
   (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config))
         body (cond->
                {
@@ -128,23 +130,12 @@
                 :step_count       (if step-supported? (total-step-count episodes))
                 :longest_trek     {:unit "km" :value (longest-trek-in-km episodes)}
                 :coverage         (algorithms/coverage date zone episodes)
-                :episodes         (map (fn [epi]
-                                         (let [locations
-                                               (map
-                                                 #(vector (:latitude %) (:longitude %) (:accuracy %) (:timestamp %))
-                                                 (-> epi
-                                                     (:trace-data)
-                                                     (:location-trace)))]
-                                           (cond-> (dissoc epi :raw-data :trace-data)
-                                                   (and (not= (:inferred-state epi) :still)
-                                                        (not hide-location?))
-                                                   (assoc :locations locations)
-                                                   hide-location?
-                                                   (dissoc :cluster)
-                                                   )
-                                           )
-                                         ) episodes)
-
+                :episodes         (for [epi episodes]
+                                    (cond->
+                                      (dissoc epi :locations :steps)
+                                      hide-location?
+                                      (dissoc :cluster)
+                                      ))
                 }
                gait
                (assoc
@@ -169,9 +160,7 @@
       user device "summary"
       date zone (or (:end (last episodes)) (temporal/to-last-millis-of-day date zone))
       body
-
       )))
-
 
 (s/defn ^:always-validate get-datapoints :- [MobilityDataPoint]
   [source :- (s/protocol UserDataSourceProtocol)
@@ -192,7 +181,8 @@
         ]
     (mapcat
       (fn [day-group]
-        [(p :summary (summarize user device step-supported? hide-location? day-group))
+        [(p :summary (summarize user device step-supported? day-group hide-location?))
+
          ]
         )
       (group-by-day episodes)

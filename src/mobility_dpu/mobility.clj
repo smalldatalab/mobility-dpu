@@ -82,20 +82,60 @@
     )
   )
 
+(s/defn partitions->episodes [partitions location-samples steps-samples]
+  (let [
 
+        loc-seq (sort-by timestamp location-samples)
+        step-seq (sort-by timestamp steps-samples)
+        ; remove the location samples that have low accuracy
+        loc-seq (filter #(< (:accuracy %) 75) loc-seq)]
+    (p :associate-raw-traces
+       (loop [[p & ps] partitions loc-seq loc-seq step-seq step-seq episodes []]
+         (if p
+           (let [split (fn [trace]
+                         (->> trace
+                              (drop-while #(t/before? (timestamp %) (:start p)))
+                              (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
+                              ;(map doall)
+                              )
+                         )
+                 [loc-before loc-after] (split loc-seq)
+                 [step-before step-after] (split step-seq)
+                 episdoe (->Episode (:state p)
+                                    (:start p)
+                                    (:end p)
+                                    step-before
+                                    loc-before
+                                    )
+                 ]
+             (recur ps loc-after step-after (conj episodes episdoe))
+             )
+           episodes
+           )
+         ))
+    )
+  )
 
 
 
 (s/defn mobility-extract-episodes :- [EpisodeSchema]
   "Extract episodes from the given data source."
-  [activity-samples :- [(s/protocol ActivitySampleProtocol)]
+  [source offload-fn
+   activity-samples :- [(s/protocol ActivitySampleProtocol)]
    location-samples :- [LocationSample]
-   steps-samples :- [StepSample]]
-  (let [act-seq activity-samples
-        loc-seq location-samples
-        step-seq steps-samples
-        ; remove the location samples that have low accuracy
-        loc-seq (filter #(< (:accuracy %) 75) loc-seq)
+   steps-samples :- [StepSample]
+
+   ]
+  (let [cached-episodes (get-episode-cache (database source) (user source) (source-name source))
+        cached-episodes (sort-by :start cached-episodes)
+        cached-time (:end (last cached-episodes))
+
+        activity-samples (cond->>
+                           (sort-by timestamp activity-samples)
+                           cached-time
+                           (filter #(t/after? (timestamp %) cached-time)))
+
+        act-seq (sort-by timestamp activity-samples)
         ; downsampling
         act-seq (downsample act-seq)
         ; break the data point sequence into smaller segments at missing data gaps
@@ -112,36 +152,16 @@
         partitions (mapcat (fn [segment] (p :hmm (hmm-partition segment))) segments)
         ; remove 0-length partitions
         partitions (filter #(not= (:start %) (:end %)) partitions)
-
+        ; generate episodes
+        episodes (partitions->episodes partitions location-samples steps-samples)
+        episodes (concat cached-episodes episodes)
+        to-cache (drop-last 10 episodes)
         ]
-    ; generate episodes
-    (p :associate-raw-traces
-       (loop [[p & ps] partitions act-seq act-seq loc-seq loc-seq step-seq step-seq episodes []]
-         (if p
-           (let [split (fn [trace]
-                         (->> trace
-                              (drop-while #(t/before? (timestamp %) (:start p)))
-                              (split-with #(or (t/before? (timestamp %) (:end p)) (= (timestamp %) (:end p))))
-                              ;(map doall)
-                              )
-                         )
-                 [act-before act-after] (split act-seq)
-                 [loc-before loc-after] (split loc-seq)
-                 [step-before step-after] (split step-seq)
-                 episdoe (->Episode (:state p)
-                                    (:start p)
-                                    (:end p)
-                                    (->TraceData
-                                      act-before
-                                      loc-before
-                                      step-before
-                                      ))
-                 ]
-             (recur ps act-after loc-after step-after (conj episodes episdoe))
-             )
-           episodes
-           )
-         ))
+    (cache-episode (database source) (user source) (source-name source) to-cache)
+    ; offload data until the end of the second last episode
+    (offload-fn (:end (last to-cache)))
+    episodes
+
     )
   )
 

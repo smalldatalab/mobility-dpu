@@ -49,9 +49,10 @@
 
 (defrecord iOSUserDatasource [user db]
   UserDataSourceProtocol
+  (database [_] db)
   (source-name [_] "iOS")
   (user [_] user)
-  (extract-episodes [_]
+  (extract-episodes [this]
     (let [activity-samples (let [dp->sample
                                  (fn [dp] "convert a raw data point dp to activity sample record"
                                    (let [{:keys [activity confidence]} (first (:activities (:body dp)))]
@@ -110,16 +111,25 @@
           step-samples (for [datapoint (filter (comp :step_count :pedometer_data :body) (query db "cornell" "mobility-stream-iOS" user))]
                          (let [zone (.getZone ^DateTime (timestamp datapoint))
                                {:keys [end_date floors_ascended floors_descended step_count start_date distance]} (:pedometer_data (:body datapoint))]
-                           (StepSample.
-                             (.withZone (c/from-string start_date) zone)
-                             (.withZone (c/from-string end_date) zone)
-                             step_count
+                           (assoc
+                             (StepSample.
+                               (.withZone (c/from-string start_date) zone)
+                               (.withZone (c/from-string end_date) zone)
+                               step_count
+                               )
+                             :floors-ascended floors_ascended
+                             :floors_descended floors_descended
+                             :distance distance
                              )
                            )
                          )
+          offload-fn (fn [until]
+                       (offload-data db "cornell" "mobility-stream-iOS" user until)
+
+                       )
           ]
 
-      (mobility/mobility-extract-episodes activity-samples location-samples step-samples)
+      (mobility/mobility-extract-episodes this offload-fn activity-samples location-samples step-samples )
       )
     )
 

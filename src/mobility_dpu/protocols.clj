@@ -18,6 +18,12 @@
 (def Longitude s/Num)
 (def Accuracy s/Num)
 
+
+
+(def DateSchema (s/pred #(f/parse (ISODateTimeFormat/date) (str %)) "valid date"))
+(def DateTimeSchema (s/pred #(f/parse (ISODateTimeFormat/dateTime) (str %)) "valid datetime"))
+
+
 (def Location
   {:latitude Latitude
    :longitude Longitude
@@ -63,13 +69,50 @@
     :hourly-distribution [[(s/one s/Int "hour") (s/one s/Num "number of hours")]]
     ))
 
+(defprotocol MalleableProtocol
+  (trim [this start end])
+  (merge-two [this that])
+  )
 
+(s/defrecord Episode [inferred-state :- State
+                      start :- (s/protocol t/DateTimeProtocol)
+                      end :- (s/protocol t/DateTimeProtocol)
+                      steps :- (s/maybe [StepSample])
+                      locations :- [LocationSample]]
+  MalleableProtocol
+  (trim [this
+         new-start
+         new-end]
+    (let [interval (t/interval new-start new-end)
+          within #(or (t/within? interval (timestamp %)) (= new-end (timestamp %)))]
+      (assoc this
+        :start new-start
+        :end new-end
+        :locations (filter within locations)
+        :steps (filter within steps)
+        )))
+  (merge-two [a b]
+    (assoc a
+      :locations (sort-by timestamp (concat locations (:locations b)))
+      :steps (sort-by timestamp (concat steps (:steps b)))
+      :start (if (t/before? (:start a) (:start b))
+               (:start a)
+               (:start b)
+               )
+      :end (if (t/after? (:end a) (:end b))
+             (:end a)
+             (:end b)
+             )
+      ))
+
+  )
 
 (def EpisodeSchema
   {:inferred-state State
    :start (s/protocol t/DateTimeProtocol)
    :end (s/protocol t/DateTimeProtocol)
-   :trace-data TraceData
+   :steps (s/maybe [StepSample])
+   :locations [LocationSample]
    (s/optional-key :cluster) Cluster
    (s/optional-key :home?) s/Bool
    ; distance in KM
@@ -82,14 +125,20 @@
    })
 
 
+(def CompactEpisodeSchema
+  (assoc EpisodeSchema
+    :steps [(s/one (s/eq ["step-count" "start" "end"]) :title)
+            [(s/one s/Num :lat) (s/one DateTimeSchema :start) (s/one DateTimeSchema :end)]]
+    :locations [(s/one (s/eq ["latitude" "longitude" "accuracy" "timestamp"]) :title)
+                [(s/one s/Num :lat) (s/one s/Num :lng) (s/one s/Num :accuracy) (s/one DateTimeSchema :timestamp)]]
+    ))
 
-(def DateSchema (s/pred #(f/parse (ISODateTimeFormat/date) (str %)) "valid date"))
-(def DateTimeSchema (s/pred #(f/parse (ISODateTimeFormat/dateTime) (str %)) "valid datetime"))
+
 
 (def DayEpisodeGroup
   {:date     LocalDate
    :zone     DateTimeZone
-   :episodes [EpisodeSchema]})
+   :episodes [s/Any]})
 
 (def DataPoint
   {:header
@@ -141,12 +190,13 @@
      :return_home_time (s/maybe DateTimeSchema)
      })
   )
-(def SegmentDataPoint
+(def EpisodeDataPoint
   (assoc DataPoint
     :body
-    {:date     DateSchema
-     :device   s/Str
-     :episodes [s/Any]
+    {:date                               DateSchema,
+     :zone                               s/Str              ; timezone
+     :device                             s/Str
+     :episodes [CompactEpisodeSchema]
      })
   )
 
@@ -157,9 +207,9 @@
       )
     SummaryDataPoint
     #(let [schema-name (get-in % [:header :schema_id :name])]
-      (= schema-name "mobility-daily-segments")
+      (= schema-name "mobility-daily-episodes")
       )
-    SegmentDataPoint
+    EpisodeDataPoint
     ))
 
 (defrecord DataPointRecord [body timestamp]
@@ -167,65 +217,15 @@
   (timestamp [_] timestamp)
   )
 
-(s/defrecord Episode [inferred-state :- State
-                      start :- (s/protocol t/DateTimeProtocol)
-                      end :- (s/protocol t/DateTimeProtocol)
-                      trace-data :- TraceData])
 
-(defmulti trim (fn [main _ _]
-                 (class main)
-                 ))
-(defmethod trim TraceData
-  [data
-   new-start
-   new-end]
-  (let [interval (t/interval new-start new-end)
-        within #(or (t/within? interval (timestamp %)) (= new-end (timestamp %)))]
-    (assoc data
-      :activity-trace (filter within (:activity-trace data))
-      :step-trace (filter within (:step-trace data))
-      :location-trace (filter within (:location-trace data)))
-    )
-  )
-(defmethod trim Episode
-  [episode   new-start   new-end]
-  (assoc episode
-    :trace-data (trim (:trace-data episode) new-start   new-end)
-    :start new-start
-    :end new-end
-    )
-  )
 
-(defmulti merge-two (fn [a b]
-                 (assert (= (class a) (class b)) )
-                  (class a)
-                 ))
-(defmethod merge-two TraceData
-  [a b]
-  (->TraceData
-    (sort-by timestamp (apply concat (map :activity-trace [a b])))
-    (sort-by timestamp (apply concat (map :location-trace [a b])))
-    (sort-by timestamp (apply concat (map :step-trace [a b])))
-    )
-  )
-(defmethod merge-two Episode
-  [a b]
-  (assoc (merge a b)
-    :trace-data (merge-two (:trace-data a) (:trace-data b))
-    :start (if (t/before? (:start a) (:start b))
-             (:start a)
-             (:start b)
-             )
-    :end (if (t/after? (:end a) (:end b))
-           (:end a)
-           (:end b)
-           )
-    )
-  )
+
 
 (defprotocol DatabaseProtocol
   (query [this schema-namespace schema-name user]
     "query data point of specific schema and user")
+  (maintain [this]
+    "create/maintain index")
   (remove-until [this ns name user date]
     "remove data up to (including) certain date"
     )
@@ -238,9 +238,18 @@
   (purge-raw-data? [this user]
     "Return whether the user's raw data should be purged."
     )
+  (cache-episode [this user group data]
+    "Cache intermidiate episode sequence"
+    )
+  (get-episode-cache [this user group]
+    "Get cached intermidiate episode sequence")
+  (offload-data [this schema-namespace schema-name user until]
+    "Offload data from the main collection"
+    )
   )
 
 (defprotocol UserDataSourceProtocol
+  (database [this] "The database of this source")
   (user [this] "Return the user name")
   (source-name [this] "Return the name of the data source")
   (step-supported? [this] "If the data source support the steps count")

@@ -44,49 +44,44 @@
   )
 
 (defn sync-one-user [user data-source purge-raw? db]
-  (try
-    (let [start-time (t/now)
-          provided-home-loc (home/provided-home-location user db)]
+  (let [start-time (t/now)
+        provided-home-loc (home/provided-home-location user db)]
+    (let [datapoints (summary/get-datapoints
+                       data-source
+                       provided-home-loc
+                       purge-raw?
+                       )]
 
-        (let [datapoints (summary/get-datapoints
-                           data-source
-                           provided-home-loc
-                           purge-raw?
-                           )]
-
-          (if (seq datapoints)
-            (let [dates (->>
-                          datapoints
-                          (map (comp :date :body))
-                          (distinct)
-                          (sort)
-                          )]
-              (doseq [datapoint datapoints]
-                (p :save (save db (s/validate MobilityDataPoint datapoint)))
+      (if (seq datapoints)
+        (let [dates (->>
+                      datapoints
+                      (map (comp :date :body))
+                      (distinct)
+                      (sort)
+                      )]
+          (doseq [datapoint datapoints]
+            (p :save (save db (s/validate MobilityDataPoint datapoint)))
+            )
+          (info "Save data for " user
+                (source-name data-source)
+                (first dates)
+                "-"
+                (last dates)
+                "Elapsed time"
+                (str (t/in-seconds (t/interval start-time (t/now))) "s")
                 )
-              (if provided-home-loc
-                (info (str "User " user " provided home location:" provided-home-loc)))
-              (info "Save data for " user
-                    (source-name data-source)
-                    (first dates)
-                    "-"
-                    (last dates)
-                    "Elapsed time"
-                    (str (t/in-seconds (t/interval start-time (t/now))) "s")
-                    )
-              (if purge-raw?
-                (let [remove-until (t/minus (c/to-local-date (last dates)) (t/days 1))]
-                  (info "Purge raw data for " user (source-name data-source)
-                        "up to " remove-until)
-                  (purge-raw-trace data-source remove-until)
-                  )
-                )
-              :success
+          (if purge-raw?
+            (let [remove-until (t/minus (c/to-local-date (last dates)) (t/days 1))]
+              (info "Purge raw data for " user (source-name data-source)
+                    "up to " remove-until)
+              (purge-raw-trace data-source remove-until)
               )
             )
+          :success
           )
+        )
       )
-    (catch Exception e (error e)))
+    )
   )
 
 
@@ -106,9 +101,13 @@
             (nil? last-process-time)
             (t/after? last-raw-data-update-time last-process-time)
             )
-        (when (sync-one-user user source purge-data? db)
-          ; store the last update time
-          (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time))
+        (try
+          (when (sync-one-user user source purge-data? db)
+            ; store the last update time
+            (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time))
+          (catch Exception e
+            (error "Sync failed: user " user  e)
+            ))
         )
       )
     ))
@@ -122,6 +121,8 @@
     {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
   (info "Run with config:" @config)
+  (info "Connecting to database")
+
   (let [db (loop []
              (if-let [db (try (mongodb)
                           (catch Exception _
@@ -133,6 +134,8 @@
                (recur)
                ))
         get-users #(or (seq args) (users db))]
+    (info "Create indexes if they did not exist ...")
+    (maintain db)
     ; Create a new thread to sync other shims sync tasks
     (future
       (loop []

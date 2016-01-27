@@ -220,11 +220,9 @@
   (let [startTime (DateTime/parse startTime date-time-format)
         endTime (DateTime/parse endTime date-time-format)
         location-trace (map (fn [{:keys [lat lon time]}] (->LocationSample (DateTime/parse time date-time-format) lat lon location-sample-accuracy)) trackPoints)
-        trace (->TraceData [] location-trace (if steps
-                                               [(->StepSample startTime endTime steps)]
-                                               []
-                                               ) )
-        episode (assoc (->Episode (activity-mapping group) startTime endTime trace) :raw-data raw-data)
+        episode (assoc (->Episode (activity-mapping group) startTime endTime
+                                  (if steps [(->StepSample startTime endTime steps)])
+                                  location-trace) :raw-data raw-data)
 
         ]
     (cond->
@@ -250,10 +248,14 @@
      (let [startTime (DateTime/parse startTime date-time-format)
        endTime (DateTime/parse endTime date-time-format)
        {:keys [lon lat]} (:location place)
-       trace (->TraceData [] [(->LocationSample startTime lat lon location-sample-accuracy)
-                              (->LocationSample endTime lat lon location-sample-accuracy)
-                              ] [])]
-   (cons (assoc (->Episode :still startTime endTime trace) :raw-data raw-data)
+         ]
+   (cons (assoc (->Episode :still startTime endTime
+                           nil
+                           [(->LocationSample startTime lat lon location-sample-accuracy)
+                            (->LocationSample endTime lat lon location-sample-accuracy)
+                            ]
+                           )
+           :raw-data raw-data)
          (activities->episodes activities)))
              )
 

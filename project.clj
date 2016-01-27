@@ -29,4 +29,5 @@
                  [org.apache.commons/commons-math3 "3.5"]
                  [prismatic/schema "1.0.3"]
                  [environ "1.0.1"]
+                 [com.taoensso/nippy "2.10.0"]
                  ])

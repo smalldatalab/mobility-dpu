@@ -5,9 +5,11 @@
             [mobility-dpu.temporal :as temporal]
             [clj-time.coerce :as c]
 
-            [taoensso.timbre :as timbre])
+            [taoensso.timbre :as timbre]
+            [clj-time.format :as f])
   (:use [mobility-dpu.protocols])
-  (:import (org.joda.time DateTime LocalDate)))
+  (:import (org.joda.time DateTime LocalDate)
+           (org.joda.time.format ISODateTimeFormat)))
 
 
 (timbre/refer-timbre)
@@ -68,10 +70,10 @@
         (p :assoc-cluster
            (let [nodes   (->> episodes
                               (filter #(= (:inferred-state %) :still) )
-                              (filter #(seq (:location-trace (:trace-data %))) )
+                              (filter #(seq (:locations %)) )
                               (map #(assoc
                                      (spatial/median-location
-                                       (:location-trace (:trace-data %)))
+                                       (:locations %))
                                      :duration (t/in-minutes (t/interval (:start %) (:end %)))
                                      :start (:start %)
                                      :end (:end %)

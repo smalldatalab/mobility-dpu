@@ -6,7 +6,7 @@
             [clj-time.coerce :as c])
   (:use [mobility-dpu.protocols])
   (:import (mobility_dpu.protocols LocationSample)
-           (org.joda.time DateTime)))
+           (org.joda.time DateTime DateTimeZone)))
 (defn normalize-activity-name [activity-name]
   (keyword (clojure.string/lower-case activity-name))
   )
@@ -41,57 +41,55 @@
 
 (defrecord AndroidUserDatasource [user db]
   UserDataSourceProtocol
+  (database [_] db)
   (source-name [_] "Android")
   (user [_] user)
-  (extract-episodes [_]
-    (let [activity-samples (for [datapoint (query db "io.smalldatalab" "mobility-android-activity-stream" user)
-                                 ]
-                             (AndroidActivitySample.
-                               (timestamp datapoint)
-                               (datapoint->activity-prob-map datapoint)
-                               )
-                             )
+  (extract-episodes [this]
+    (let [activity-samples
+          (for [datapoint (query db "io.smalldatalab" "mobility-android-activity-stream" user)
+                ]
+            (AndroidActivitySample.
+              (timestamp datapoint)
+              (datapoint->activity-prob-map datapoint)
+              )
+            )
 
-          location-samples (for [datapoint (query db "io.smalldatalab" "mobility-android-location-stream" user)]
-                             (LocationSample. (if-let [more-accurate-time (:timestamp (:body datapoint))]
-                                                (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
-                                                (timestamp datapoint))
-                                              (:latitude (:body datapoint))
-                                              (:longitude (:body datapoint))
-                                              (:accuracy (:body datapoint)))
-                             )
+          location-samples
+          (for [datapoint (query db "io.smalldatalab" "mobility-android-location-stream" user)]
+            (LocationSample. (if-let [more-accurate-time (:timestamp (:body datapoint))]
+                               (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
+                               (timestamp datapoint))
+                             (:latitude (:body datapoint))
+                             (:longitude (:body datapoint))
+                             (:accuracy (:body datapoint)))
+            )
+          step-samples
+          (for [datapoint (query db "io.smalldatalab" "mobility-android-step-stream" user)]
+            (let [z ^DateTimeZone  (.getZone (timestamp datapoint))
+                  {:keys [start end steps]} (:body datapoint)]
+              (->StepSample (DateTime. start z)
+                            (DateTime. end z)
+                            steps
+                            )
+              )
+
+            )
+          offload-fn
+          (fn [until]
+            (offload-data db "io.smalldatalab" {:$regex "^mobility-android-" } user until)
+            )
           ]
-      (mobility/mobility-extract-episodes activity-samples location-samples nil)
+      (mobility/mobility-extract-episodes this offload-fn activity-samples location-samples step-samples)
       )
     )
-
-  ; Android does not support steps count
-
   (step-supported? [_]
-    false)
+    true)
   (last-update [_]
-    (let [times (->>
-                  [(last-time db "io.smalldatalab" "mobility-android-activity-stream" user)
-                   (last-time db "io.smalldatalab" "mobility-android-location-stream" user)
-                   ]
-                   (filter identity)
-                  )
-
-          ]
-      (if (seq times)
-        (->> times
-             (map c/to-long)
-             (apply max)
-             (c/from-long)
-             )
-        (c/from-long 0)
-        )
-      )
+    (or (last-time db "io.smalldatalab"  {:$regex "^mobility-android-" } user) (c/from-long 0))
 
     )
   (purge-raw-trace [_ until]
-    (remove-until db "io.smalldatalab" "mobility-android-location-stream" user until)
-    (remove-until db "io.smalldatalab" "mobility-android-activity-stream" user until)
+    (remove-until db "io.smalldatalab" {:$regex "^mobility-android-" } user until)
     )
   )
 
