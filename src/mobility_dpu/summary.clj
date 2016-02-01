@@ -8,14 +8,16 @@
     [mobility-dpu.temporal :as temporal]
     [mobility-dpu.datapoint :as datapoint]
     [schema.core :as s]
-    [clj-time.coerce :as c])
+    [clj-time.coerce :as c]
+    [clj-time.format :as f])
   (:use [aprint.core]
         [mobility-dpu.config]
         [mobility-dpu.protocols]
         [mobility-dpu.process-episode]
         )
-  )
-;;;; The following functions are specific for EpisodeProtocol
+  (:import (org.joda.time.format ISODateTimeFormat)
+           (org.joda.time DateTime)))
+
 
 (timbre/refer-timbre)
 
@@ -109,7 +111,63 @@
                          ))
   )
 
+(s/defn ^:always-validate v1->v2-summary  :- SummaryDataPoint
+  [old :- SummaryDatePointV1]
+  (let [{:keys [body header user_id]} old
+        {:keys [creation_date_time]} header
+        datetime (f/parse (.withOffsetParsed (ISODateTimeFormat/dateTime)) creation_date_time)
+        {:keys [active_time_in_seconds walking_distance_in_km
+                date device geodiameter_in_km steps coverage episodes
+                max_gait_speed_in_meter_per_second
+                time_not_at_home_in_seconds
+                leave_home_time
+                return_home_time
+                longest-trek-in-km]} body
+        body (->
+               {:active_time                        {:unit "sec" :value active_time_in_seconds},
+                :walking_distance                   {:unit "km" :value walking_distance_in_km},
+                :home                               (cond-> {}
+                                                            leave_home_time
+                                                            (assoc :leave_home_time leave_home_time)
+                                                            return_home_time
+                                                            (assoc :return_home_time return_home_time),
+                                                            time_not_at_home_in_seconds
+                                                            (assoc :time_not_at_home {:unit "sec" :value time_not_at_home_in_seconds}))
+                :date                               date
 
+                :device                             device
+
+                :geodiameter                        {:unit "km" :value geodiameter_in_km},
+                :step_count                         steps,
+                :coverage                           coverage,
+                :episodes                           episodes
+                :zone                               (str (.getZone ^DateTime datetime))
+                ;; for backward compatibility
+                :geodiameter_in_km                  geodiameter_in_km
+                :walking_distance_in_km             walking_distance_in_km
+                :active_time_in_seconds             active_time_in_seconds
+                :steps                              steps
+                :max_gait_speed_in_meter_per_second max_gait_speed_in_meter_per_second
+                :time_not_at_home_in_seconds        time_not_at_home_in_seconds
+                :leave_home_time                    leave_home_time
+                :return_home_time                   return_home_time
+                }
+               (cond-> longest-trek-in-km
+                       (assoc  :longest_trek {:unit "km" :value longest-trek-in-km})
+                       max_gait_speed_in_meter_per_second
+                       (assoc
+                         :max_gait_speed    {:unit "mps" :value max_gait_speed_in_meter_per_second},
+                         :gait_speed        {:gait_speed max_gait_speed_in_meter_per_second, :quantile 0.9, :n_meters 50})
+                       )
+               )
+        ]
+    (mobility-datapoint
+      user_id device "summary"
+      date (.getZone ^DateTime datetime) datetime
+      body
+      )
+    )
+  )
 
 
 
@@ -179,11 +237,9 @@
                         (home-clusters (:cluster %))
                         (assoc :home? true)) episodes)
         ]
-    (mapcat
+    (map
       (fn [day-group]
-        [(p :summary (summarize user device step-supported? day-group hide-location?))
-
-         ]
+        (summarize user device step-supported? day-group hide-location?)
         )
       (group-by-day episodes)
       )

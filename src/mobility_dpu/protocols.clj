@@ -160,7 +160,7 @@
 (def SummaryDataPoint
   (assoc DataPoint
     :body
-    {:longest_trek                       {:unit #"km" :value s/Num},
+    {(s/optional-key :longest_trek)      {:unit #"km" :value s/Num},
      :active_time                        {:unit #"sec" :value s/Num},
      :walking_distance                   {:unit #"km" :value s/Num},
      :home                               (s/maybe
@@ -190,6 +190,30 @@
      :return_home_time (s/maybe DateTimeSchema)
      })
   )
+
+(def SummaryDatePointV1
+  (assoc DataPoint
+    :body
+    {(s/optional-key :longest-trek-in-km)  s/Num
+     :active_time_in_seconds s/Num
+     :walking_distance_in_km s/Num
+     :steps (s/maybe s/Num)
+     :coverage s/Num
+     :date  DateSchema,
+     (s/optional-key :home)  s/Any
+     (s/optional-key :leave_home_time) (s/maybe DateTimeSchema)
+     (s/optional-key :return_home_time) (s/maybe DateTimeSchema)
+     (s/optional-key :time_not_at_home_in_seconds) s/Num
+     :max_gait_speed_in_meter_per_second (s/maybe s/Num)
+     :geodiameter_in_km s/Num
+     :device s/Str,
+     :gait_speed {:gait_speed (s/maybe s/Num), :quantile s/Num, :n_meters (s/maybe s/Num)}
+     (s/optional-key :episodes) [s/Any]
+     }
+    :header s/Any
+
+    ))
+
 (def EpisodeDataPoint
   (assoc DataPoint
     :body

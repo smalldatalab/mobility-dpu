@@ -10,7 +10,8 @@
             [clj-time.format :as f]
             [taoensso.nippy :as nippy]
             [clj-time.coerce :as c]
-            [taoensso.timbre :as timbre])
+            [taoensso.timbre :as timbre]
+            [mobility-dpu.summary :as summary])
   (:use [mobility-dpu.config]
         [mobility-dpu.protocols])
   (:import (clojure.lang IPersistentMap IPersistentCollection)
@@ -66,6 +67,7 @@
             ))
         )
       (maintain [_]
+        (info "Ensure indexes ...")
         (mc/ensure-index
           db data-coll
           (array-map  "user_id" 1,
@@ -88,6 +90,24 @@
           (array-map  "user" 1,
                       "device"  1)
           )
+        (info "Migrate v1 summary to v2 ...")
+        ; convert old (v1) summary data point to v2
+        (doseq [old (->> (mq/with-collection
+                           db coll
+                           (mq/find {:header.schema_id.name "mobility-daily-summary"
+                                     :header.schema_id.version.major 1})
+                           (mq/keywordize-fields true)
+                           )
+                         (sort-by #(get-in % [:header :creation_date_time_epoch_milli])))
+
+
+                ]
+          (mc/save db coll (summary/v1->v2-summary old))
+          (mc/save db "mobilityOldSummary" old)
+          (mc/remove-by-id db coll (:_id old))
+          )
+
+
         )
       (remove-until [_ ns name user date]
         (mc/remove
