@@ -170,14 +170,21 @@
   )
 
 
+(s/defn dissoc-locations
+  [datapoint :- SummaryDataPoint]
+  (->>
+    (get-in datapoint [:body :episodes])
+    (map #(dissoc % :cluster))
+    (assoc-in datapoint [:body :episodes])
+    )
 
+  )
 
 (s/defn summarize :- SummaryDataPoint
   [user :- s/Str
    device :- s/Str
    step-supported? :- s/Bool
-   {:keys [episodes date zone]} :- DayEpisodeGroup
-   hide-location? :- s/Bool]
+   {:keys [episodes date zone]} :- DayEpisodeGroup]
   (let [gait (gait-speed episodes (:n-meters-of-gait-speed @config) (:quantile-of-gait-speed @config))
         body (cond->
                {
@@ -189,11 +196,7 @@
                 :longest_trek     {:unit "km" :value (longest-trek-in-km episodes)}
                 :coverage         (algorithms/coverage date zone episodes)
                 :episodes         (for [epi episodes]
-                                    (cond->
-                                      (dissoc epi :locations :steps)
-                                      hide-location?
-                                      (dissoc :cluster)
-                                      ))
+                                    (dissoc epi :locations :steps))
                 }
                gait
                (assoc
@@ -223,7 +226,7 @@
 (s/defn ^:always-validate get-datapoints :- [MobilityDataPoint]
   [source :- (s/protocol UserDataSourceProtocol)
    provided-home-location :- (s/maybe Location)
-   & [hide-location? :- s/Bool]]
+   ]
   (let [user (user source)
         device (source-name source)
         step-supported? (step-supported? source)
@@ -239,7 +242,7 @@
         ]
     (map
       (fn [day-group]
-        (summarize user device step-supported? day-group hide-location?)
+        (summarize user device step-supported? day-group)
         )
       (group-by-day episodes)
       )

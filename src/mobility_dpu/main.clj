@@ -43,15 +43,18 @@
     )
   )
 
-(defn sync-one-user [user data-source purge-raw? db]
+(defn sync-one-user [user data-source purge-gps? db]
   (let [start-time (t/now)
         provided-home-loc (home/provided-home-location user db)]
     (let [datapoints (summary/get-datapoints
                        data-source
                        provided-home-loc
-                       purge-raw?
-                       )]
-
+                       )
+          ; purge GPS data
+          datapoints (cond->>
+                       datapoints
+                       purge-gps?
+                       (map summary/dissoc-locations))]
       (if (seq datapoints)
         (let [dates (->>
                       datapoints
@@ -60,23 +63,17 @@
                       (sort)
                       )]
           (doseq [datapoint datapoints]
-            (p :save (save db (s/validate MobilityDataPoint datapoint)))
+            ; now purge gps
+            (save db (s/validate MobilityDataPoint datapoint))
             )
-          (info "Save data for " user
-                (source-name data-source)
-                (first dates)
-                "-"
-                (last dates)
-                "Elapsed time"
-                (str (t/in-seconds (t/interval start-time (t/now))) "s")
+          (info (format "Save data for %s %s %s-%s Elapsed time %ss"
+                        user
+                        (source-name data-source)
+                        (first dates)
+
+                        (last dates)
+                        (t/in-seconds (t/interval start-time (t/now))))
                 )
-          (if purge-raw?
-            (let [remove-until (t/minus (c/to-local-date (last dates)) (t/days 1))]
-              (info "Purge raw data for " user (source-name data-source)
-                    "up to " remove-until)
-              (purge-raw-trace data-source remove-until)
-              )
-            )
           :success
           )
         )
@@ -93,8 +90,10 @@
     (let [source (source-fn user)
           last-raw-data-update-time (last-update source)
           last-process-time (get @user-source->last-update  [user (source-name source)])
-          purge-data? (purge-raw-data? db user)
+          purge-gps? (remove-gps? db user)
           ]
+      (if purge-gps?
+        (info "We need to purge GPS data of " user))
       ; only compute new data points if there are new raw data that have been uploaded
       (if
         (or (nil? last-raw-data-update-time)
@@ -102,7 +101,7 @@
             (t/after? last-raw-data-update-time last-process-time)
             )
         (try
-          (when (sync-one-user user source purge-data? db)
+          (when (sync-one-user user source purge-gps? db)
             ; store the last update time
             (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time))
           (catch Exception e

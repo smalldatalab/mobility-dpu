@@ -32,6 +32,9 @@
 
    ; gmap api key
    :gmap-geo-coding-server-key "YOUR_GMAP_API_KEY"
+
+   ; jdbc uri to the admindashboard postgres db
+   :admin-dashboard-jdbc-uri "jdbc:postgresql://omh-postgres/admindashboard?user=postgres&password=postgres"
    })
 
 (defn assoc-env [config env]
@@ -51,6 +54,9 @@
                   (map (fn [[provider type]] {(keyword provider) [(clojure.string/upper-case type)]}))
                   (apply merge-with concat)
                   ))
+      (env :admin-dashboard-jdbc-uri)
+      (assoc :admin-dashboard-jdbc-uri (env :admin-dashboard-jdbc-uri))
+
       )
   )
 

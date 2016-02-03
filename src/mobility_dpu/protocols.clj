@@ -259,8 +259,8 @@
     "Save the data point. Replace the existing data point with the same id.")
   (users [this]
     "Return distinct users")
-  (purge-raw-data? [this user]
-    "Return whether the user's raw data should be purged."
+  (remove-gps? [this user]
+    "Return whether the user's gps data should be purged."
     )
   (cache-episode [this user group data]
     "Cache intermidiate episode sequence"
@@ -279,7 +279,6 @@
   (step-supported? [this] "If the data source support the steps count")
   (extract-episodes [this])
   (last-update [this] "Return the last update time")
-  (purge-raw-trace [this until-date] "Remove the raw data until (and including) the given date")
   )
 
 

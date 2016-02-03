@@ -28,6 +28,13 @@
                  [clj-http "1.0.1"]
                  [org.apache.commons/commons-math3 "3.5"]
                  [prismatic/schema "1.0.3"]
+                 ; for environment vars
                  [environ "1.0.1"]
+                 ; for serializing episode cache
                  [com.taoensso/nippy "2.10.0"]
+                 ; for getting remove-gps? from Postgresql
+                 [org.clojure/java.jdbc "0.4.2"]
+                 [org.postgresql/postgresql "9.4.1207.jre6"]
+                 [honeysql "0.6.2"]
+
                  ])
