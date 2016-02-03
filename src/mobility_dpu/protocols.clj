@@ -279,6 +279,7 @@
   (step-supported? [this] "If the data source support the steps count")
   (extract-episodes [this])
   (last-update [this] "Return the last update time")
+  (purge-raw-trace [this until-date] "Remove the raw data until (and including) the given date")
   )
 
 
