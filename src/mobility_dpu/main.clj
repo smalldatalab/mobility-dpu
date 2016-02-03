@@ -66,13 +66,15 @@
             ; now purge gps
             (save db (s/validate MobilityDataPoint datapoint))
             )
-          (info (format "Save data for %s %s %s-%s Elapsed time %ss"
+          (info (format "Save data for %s %s %s-%s Elapsed time %ss (Remove Gps? %s)"
                         user
                         (source-name data-source)
                         (first dates)
 
                         (last dates)
-                        (t/in-seconds (t/interval start-time (t/now))))
+                        (t/in-seconds (t/interval start-time (t/now)))
+                        purge-gps?
+                        )
                 )
           :success
           )
@@ -92,8 +94,6 @@
           last-process-time (get @user-source->last-update  [user (source-name source)])
           purge-gps? (remove-gps? db user)
           ]
-      (if purge-gps?
-        (info "We need to purge GPS data of " user))
       ; only compute new data points if there are new raw data that have been uploaded
       (if
         (or (nil? last-raw-data-update-time)
