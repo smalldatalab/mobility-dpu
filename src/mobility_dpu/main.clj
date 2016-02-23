@@ -105,7 +105,7 @@
             ; store the last update time
             (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time))
           (catch Exception e
-            (error "Sync failed: user " user  e)
+            (error  e (str "Sync failed: user " user " " (source-name source) " " last-raw-data-update-time))
             ))
         )
       )
