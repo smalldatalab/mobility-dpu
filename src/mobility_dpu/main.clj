@@ -94,12 +94,14 @@
           last-process-time (get @user-source->last-update  [user (source-name source)])
           purge-gps? (remove-gps? db user)
           ]
+
       ; only compute new data points if there are new raw data that have been uploaded
       (if
         (or (nil? last-raw-data-update-time)
             (nil? last-process-time)
             (t/after? last-raw-data-update-time last-process-time)
             )
+        ;; process data
         (try
           (when (sync-one-user user source purge-gps? db)
             ; store the last update time
@@ -107,6 +109,8 @@
           (catch Exception e
             (error  e (str "Sync failed: user " user " " (source-name source) " " last-raw-data-update-time))
             ))
+        ;; do not process data, print out reason
+        (info (format "Skip user %s %s Last Raw Data: %s Last processed: %s" user (source-name source) last-raw-data-update-time last-process-time))
         )
       )
     ))
