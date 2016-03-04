@@ -57,7 +57,7 @@
           location-samples
           (for [datapoint (query db "io.smalldatalab" "mobility-android-location-stream" user)]
             (LocationSample. (if-let [more-accurate-time (:timestamp (:body datapoint))]
-                               (DateTime. more-accurate-time (.getZone ^DateTime (timestamp datapoint)))
+                               (DateTime. (long more-accurate-time) (.getZone ^DateTime (timestamp datapoint)))
                                (timestamp datapoint))
                              (:latitude (:body datapoint))
                              (:longitude (:body datapoint))
@@ -67,8 +67,8 @@
           (for [datapoint (query db "io.smalldatalab" "mobility-android-step-stream" user)]
             (let [z ^DateTimeZone  (.getZone (timestamp datapoint))
                   {:keys [start end steps]} (:body datapoint)]
-              (->StepSample (DateTime. start z)
-                            (DateTime. end z)
+              (->StepSample (DateTime. (long start) z)
+                            (DateTime. (long end) z)
                             steps
                             )
               )
