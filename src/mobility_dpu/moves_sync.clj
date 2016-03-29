@@ -4,8 +4,10 @@
             [clj-time.coerce :as c]
             [mobility-dpu.throttle :as throttle]
 
-            [schema.core :as s])
+            [schema.core :as s]
+            [clojure.java.jdbc :as sql])
   (:use [mobility-dpu.protocols]
+        [mobility-dpu.moves-convert]
         [mobility-dpu.config]
         [mobility-dpu.process-episode]
         [aprint.core])
@@ -13,92 +15,24 @@
            (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
 
 
+
+;;; Endpoints
+
+(def authorizations-endpoint (delay (str (:shim-endpoint @config) "/authorizations")))
+(def moves-shim (delay (str (:shim-endpoint @config) "/data/moves/")))
+(def profile-endpoint (delay (str @moves-shim "profile")))
+(def storyline-endpoint (delay (str @moves-shim "storyline")))
+(def summary-endpoint (delay (str @moves-shim "summary")))
+
+
+(def date-format (ISODateTimeFormat/basicDate))
+
 (def request-throttle (let [t1 (throttle/create-throttle! (t/hours 1) 1400)
                             t2 (throttle/create-throttle! (t/minutes 1) 50)]
                         (fn [f]
                           (t1 #(t2 f))
                           )
                         ))
-(def authorizations-endpoint (delay (str (:shim-endpoint @config) "/authorizations")))
-(def moves-shim (delay (str (:shim-endpoint @config) "/data/moves/")))
-(def profile-endpoint (delay (str @moves-shim "profile")))
-(def storyline-endpoint (delay (str @moves-shim "storyline")))
-(def summary-endpoint (delay (str @moves-shim "summary")))
-(def location-sample-accuracy 50)
-
-
-(def MovesTimestemp #"\d{8}T\d{6}([-+]\d{4})|Z")
-(def MovesDate #"\d{8}")
-(def MovesActitivyGroup (s/enum "walking" "running" "cycling" "transport"))
-(def MovesLocation
-  {:lat s/Num, :lon s/Num})
-(def MovesTrackPoint
-  (assoc MovesLocation  :time MovesTimestemp))
-(def MovesActivity
-  {(s/optional-key :group)       MovesActitivyGroup,
-   (s/optional-key :startTime)   MovesTimestemp,
-   (s/optional-key :endTime)     MovesTimestemp,
-   (s/optional-key :steps)        s/Num,
-   ; the distance in meters
-   (s/optional-key :distance)    s/Num
-   (s/optional-key :calories) s/Num
-   :trackPoints [MovesTrackPoint],
-   ; the duration in seconds
-   :duration    s/Num,
-   :manual      s/Bool,
-   :activity    s/Str
-   s/Any s/Any
-   })
-
-(def PlaceSegment
-  {:type       #"place",
-   :startTime  MovesTimestemp,
-   :endTime    MovesTimestemp,
-   :place      {:type s/Str,
-
-                :location {:lat s/Num, :lon s/Num}
-                (s/optional-key :id) s/Num,
-                (s/optional-key :foursquareId) s/Str
-                (s/optional-key :facebookPlaceId) s/Str
-                (s/optional-key :foursquareCategoryIds) [s/Str]
-                (s/optional-key :name) s/Str
-                },
-   (s/optional-key :activities) [MovesActivity],
-   :lastUpdate MovesTimestemp})
-
-(def MovingSegment
-  {:type (s/enum "move" "off"),
-   :startTime  MovesTimestemp,
-   :endTime    MovesTimestemp,
-   (s/optional-key :activities) [MovesActivity],
-   :lastUpdate MovesTimestemp})
-
-(def Segment
-  (s/conditional
-    #(= (:type %) "move")
-    MovingSegment
-    #(= (:type %) "off")
-    MovingSegment
-    #(= (:type %) "place")
-    PlaceSegment
-    )
-  )
-
-(def MovesData
-  {:zone DateTimeZone
-   :date MovesDate
-   :summary [s/Any]
-   :segments [Segment]
-   (s/optional-key :caloriesIdle) s/Num
-   (s/optional-key :lastUpdate) MovesTimestemp
-   }
-  )
-
-
-
-
-(def date-time-format (.withOffsetParsed ^DateTimeFormatter (ISODateTimeFormat/basicDateTimeNoMillis)))
-(def date-format (ISODateTimeFormat/basicDate))
 
 (defn client [endpoint params]
   (loop []
@@ -109,10 +43,13 @@
                                 params
                                 {:as               :json
                                  :throw-exceptions false})))]
-      (if (and (= 500 status)
+      (println res)
+      (if
+        (and (= 500 status)
                (.contains ^String body "429 Client Error (429)"))
        (do (Thread/sleep 60000)
            (recur))
+
        res)
 
 
@@ -121,15 +58,7 @@
   )
 
 
-(defn- get-auths
-  "return the authorizations the user has"
-  [user]
-  (let [body (get-in (client @authorizations-endpoint {:query-params     {"username" user}
-                                                      })
-                     [:body])]
-    (mapcat :auths body)
-    )
-  )
+
 ;;; The following two functions query Moves data from the shim server
 
 (defn get-profile
@@ -144,6 +73,7 @@
        :current-zone (DateTimeZone/forID (get-in profile [:currentTimeZone :id]))})
     )
   )
+
 
 (s/defn   daily-storyline-sequence :- [MovesData]
   "Query the storylines from the moves until the current date in the user's timezone"
@@ -211,64 +141,38 @@
   )
 
 
-(def activity-mapping {"transport" :in_vehicle
-                       "cycling"   :on_bicycle
-                       "running"   :on_foot
-                       "walking"   :on_foot})
 
-(s/defn ^:always-validate activity->episode :- EpisodeSchema [{:keys [group startTime endTime steps distance calories trackPoints duration] :as raw-data} :- MovesActivity]
-  (let [startTime (DateTime/parse startTime date-time-format)
-        endTime (DateTime/parse endTime date-time-format)
-        location-trace (map (fn [{:keys [lat lon time]}] (->LocationSample (DateTime/parse time date-time-format) lat lon location-sample-accuracy)) trackPoints)
-        episode (assoc (->Episode (activity-mapping group) startTime endTime
-                                  (if steps [(->StepSample startTime endTime steps)])
-                                  location-trace) :raw-data raw-data)
 
-        ]
-    (cond->
-      episode
-      distance (assoc :distance (/ distance 1000.0))
-      calories (assoc :calories calories)
-      duration (assoc :duration duration)
-      ))
+
+(defn- get-auths
+  "return the authorizations the user has"
+  [user]
+  (let [{:keys [body]} (client @authorizations-endpoint {:query-params     {"username" user}})]
+    (mapcat :auths body)
+    )
   )
-
-(defmulti segment->episodes :type)
-
-(s/defn activities->episodes :- [EpisodeSchema]
-  [activities :- [MovesActivity]]
-  (->>
-    activities
-    (filter #(and (:group %) (:startTime %) (:endTime %)))
-    (map activity->episode))
-  )
-(s/defmethod ^:always-validate segment->episodes "place" :- [EpisodeSchema]
-
-   [{:keys [startTime endTime place activities] :as raw-data} :- PlaceSegment]
-     (let [startTime (DateTime/parse startTime date-time-format)
-       endTime (DateTime/parse endTime date-time-format)
-       {:keys [lon lat]} (:location place)
-         ]
-   (cons (assoc (->Episode :still startTime endTime
-                           nil
-                           [(->LocationSample startTime lat lon location-sample-accuracy)
-                            (->LocationSample endTime lat lon location-sample-accuracy)
-                            ]
-                           )
-           :raw-data raw-data)
-         (activities->episodes activities)))
-             )
-
-(s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
-   [{:keys [activities]} :- MovingSegment]
-             (activities->episodes activities))
-
-(s/defmethod ^:always-validate segment->episodes "off" :- [EpisodeSchema]
-             [{:keys [activities]} :- MovingSegment]
-             (activities->episodes activities))
 
 (defn auth? [user]
   ((into #{} (get-auths user)) "moves"))
+
+(defn last-update-time [user]
+  (if-let [update-time (->>
+                         (reverse-daily-summary-sequence user)
+                         (map :lastUpdate)
+                         (remove nil?)
+                         (first)) ]
+    (DateTime/parse update-time date-time-format)
+    ))
+
+(defn status [user]
+  (if (and (auth? user))
+    {:token? true
+     :token-valid? (not (nil? (get-profile user)))
+     :last-time (last-update-time user)
+     }
+    {:token? false}
+    )
+  )
 
 (s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
   [user :- s/Str]
@@ -293,16 +197,33 @@
     true)
   (last-update [_]
     (if (auth? user)
-      (if-let [update-time (:lastUpdate (first (filter :lastUpdate (reverse-daily-summary-sequence user))))]
-        (DateTime/parse update-time date-time-format)
-        ))
+      (last-update-time user)
+      )
 
     )
   )
 
+; code for query Moves token status
+(comment
+  (def db-spec (delay {:connection-uri (@config :admin-dashboard-jdbc-uri)}))
+  (def report
+    (->>
+      (sql/query
+        @db-spec
+        ["
+              SELECT username, users.id as id
+              FROM users
+              INNER JOIN study_participants ON study_participants.user_id = users.id
+              INNER JOIN studies ON study_participants.study_id = studies.id
+              WHERE studies.name = ?;" "HSSJan2015testpilot"])
+      (map (fn [%] (merge % (status (:username %)))))
 
-
-
-
-
-
+      ))
+  (->>
+    (for [{:keys [username id token? token-valid? last-time]} report]
+      (format "%s,%s,%s,%s,%s" username id token? token-valid? last-time)
+      )
+    (cons "username,id,token?,token-valid?,last-time")
+    (clojure.string/join "\n")
+    )
+  )
