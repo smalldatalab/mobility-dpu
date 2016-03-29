@@ -43,7 +43,6 @@
                                 params
                                 {:as               :json
                                  :throw-exceptions false})))]
-      (println res)
       (if
         (and (= 500 status)
                (.contains ^String body "429 Client Error (429)"))
