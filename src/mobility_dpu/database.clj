@@ -214,8 +214,21 @@
           :count
           (> 0)
           )
-
-
+        )
+      (study-users [_ study]
+        (->>
+          (sql/query
+            @db-spec
+            ["
+              SELECT username
+              FROM users
+              INNER JOIN study_participants ON study_participants.user_id = users.id
+              INNER JOIN studies ON study_participants.study_id = studies.id
+              WHERE studies.name = ?;" study])
+          (map :username)
+          )
         )
       ))
   )
+
+

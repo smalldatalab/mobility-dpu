@@ -270,6 +270,8 @@
   (offload-data [this schema-namespace schema-name user until]
     "Offload data from the main collection"
     )
+  (study-users [this study]
+    "Return users who participate in the given study")
   )
 
 (defprotocol UserDataSourceProtocol
