@@ -135,10 +135,19 @@
                      (activities->episodes activities)))
              )
 
-(s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
-             [{:keys [activities]} :- MovingSegment]
-             (activities->episodes activities))
+(defmethod  segment->episodes "move"
+             [{:keys [activities] :as m}]
+  ; validate input
+  (s/validate MovingSegment m)
+  ; validate output
+  (s/validate [EpisodeSchema] (activities->episodes activities)))
 
-(s/defmethod ^:always-validate segment->episodes "off" :- [EpisodeSchema]
-             [{:keys [activities]} :- MovingSegment]
-             (activities->episodes activities))
+
+(defmethod  segment->episodes "off"
+  [{:keys [activities] :as m}]
+  ; validate input
+  (s/validate MovingSegment m)
+  ; validate output
+  (s/validate [EpisodeSchema] (activities->episodes activities)))
+
+
