@@ -80,9 +80,12 @@
                                      ))
                               )
                  epsKM (* 0.001 epsMeters)
+
+                 ; memoize pairwise distance (memoize by :start time to avoid wasting space)
+                 pair-distance (fn [n1 n2] (spatial/haversine n1 n2))
                  get-neighbors (fn [node]
                                  (let [neighbors (filter
-                                                   #(and (<= (spatial/haversine node %) epsKM))
+                                                   #(and (<= (pair-distance node %) epsKM))
                                                    nodes)
                                        is-center? (>= (minutes-sum neighbors) minMinutes)
                                        ]
@@ -91,10 +94,14 @@
                                    ))
 
                  expand-nodes (fn expand-nodes [nodes-to-expand unvisited-nodes]
+                                "Expand from the nodes-to-expand"
                                 (if-let [node (first nodes-to-expand)]
-                                  (let [new-nodes-to-expand
+                                  (let [; get unvisited neighbors of the current node
+                                        new-nodes-to-expand
                                         (if (unvisited-nodes node)
-                                          (get-neighbors node))
+                                          (->> (get-neighbors node)
+                                               (filter unvisited-nodes ))
+                                          )
                                         nodes-to-expand (disj (into nodes-to-expand new-nodes-to-expand) node)
                                         unvisited-nodes (disj unvisited-nodes node)
                                         ]
