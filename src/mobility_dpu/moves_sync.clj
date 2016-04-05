@@ -3,7 +3,7 @@
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [mobility-dpu.throttle :as throttle]
-
+            [clojure.core.reducers :as r]
             [schema.core :as s]
             [clojure.java.jdbc :as sql])
   (:use [mobility-dpu.protocols]
@@ -97,12 +97,13 @@
          storylines (->> (get-in response [:body :body])
                          (map #(assoc % :zone zone))
                          (s/validate [MovesData])
+                         (into [])
                          )
 
          ]
      (if (= end til)
        storylines
-       (concat storylines (lazy-seq
+       (into storylines (lazy-seq
                             (daily-storyline-sequence user (t/plus start (t/days 7)) til zone))))
      )
     )
@@ -133,7 +134,7 @@
           ]
       (if (= start first-date)
         summaries
-        (concat summaries (lazy-seq
+        (into summaries (lazy-seq
                              (reverse-daily-summary-sequence user first-date (t/minus to (t/days 31))))))
       )
     )
@@ -173,13 +174,13 @@
     )
   )
 
-(s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
+(s/defn moves-extract-episodes :- (s/maybe [EpisodeSchema])
   [user :- s/Str]
   (if (auth? user)
     (->> (daily-storyline-sequence user)
-         (mapcat :segments)
-         (mapcat segment->episodes)
-
+         (r/mapcat :segments)
+         (r/mapcat segment->episodes)
+         (into [])
          (group-by #(select-keys % [:start :inferred-state]))
          (map (comp last second))
          (sort-by :start)

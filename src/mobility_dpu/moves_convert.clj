@@ -85,7 +85,7 @@
                        "running"   :on_foot
                        "walking"   :on_foot})
 
-(s/defn ^:always-validate activity->episode :- EpisodeSchema
+(s/defn activity->episode :- EpisodeSchema
         "Convert single activity instance in Moves record to Mobility episode"
         [{:keys [group startTime endTime steps distance calories trackPoints duration] :as raw-data} :- MovesActivity]
 
@@ -119,7 +119,7 @@
 
 (defmulti segment->episodes :type)
 
-(s/defmethod ^:always-validate segment->episodes "place" :- [EpisodeSchema]
+(s/defmethod segment->episodes "place" :- [EpisodeSchema]
              [{:keys [startTime endTime place activities] :as raw-data} :- PlaceSegment]
              (let [startTime (DateTime/parse startTime date-time-format)
                    endTime (DateTime/parse endTime date-time-format)
@@ -135,10 +135,12 @@
                      (activities->episodes activities)))
              )
 
-(s/defmethod ^:always-validate segment->episodes "move" :- [EpisodeSchema]
+(s/defmethod segment->episodes "move" :- [EpisodeSchema]
              [{:keys [activities]} :- MovingSegment]
              (activities->episodes activities))
 
-(s/defmethod ^:always-validate segment->episodes "off" :- [EpisodeSchema]
+(s/defmethod segment->episodes "off" :- [EpisodeSchema]
              [{:keys [activities]} :- MovingSegment]
              (activities->episodes activities))
+
+

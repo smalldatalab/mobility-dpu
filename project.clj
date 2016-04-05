@@ -36,5 +36,5 @@
                  [org.clojure/java.jdbc "0.4.2"]
                  [org.postgresql/postgresql "9.4.1207.jre6"]
                  [honeysql "0.6.2"]
-
+                 [reply "0.3.7"]
                  ])
