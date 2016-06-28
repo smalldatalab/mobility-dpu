@@ -124,6 +124,7 @@
     {:appenders {:spit (appenders/spit-appender {:fname (:log-file @config)})}})
 
   (info "Run with config:" @config)
+  (info "This version do not check remove GPS option on admindashboard")
   (info "Connecting to database")
 
   (let [db (loop []

@@ -33,8 +33,9 @@
              )]
     {:_id     id
      :_class  "org.openmhealth.dsu.domain.DataPoint"
-     :user_id user
+
      :header  {:id                             id,
+               :user_id user
                :schema_id                      {:namespace namespace,
                                                 :name      schema,
                                                 :version   {:major version, :minor version-minor}},

@@ -201,21 +201,21 @@
           )
         )
       (remove-gps? [_ user]
-        (->
-          (sql/query
-            @db-spec
-            ["
+        (comment
+          (->
+            (sql/query
+              @db-spec
+              ["
               SELECT COUNT(*)
               FROM users
               INNER JOIN study_participants ON study_participants.user_id = users.id
               INNER JOIN studies ON study_participants.study_id = studies.id
               WHERE username = ? AND remove_gps = true;" user])
-          (first)
-          :count
-          (> 0)
-          )
-
-
+            (first)
+            :count
+            (> 0)
+            ))
+        nil
         )
       ))
   )
