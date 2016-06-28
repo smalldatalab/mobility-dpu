@@ -142,7 +142,8 @@
 
 (def DataPoint
   {:header
-            {:acquisition_provenance         {(s/optional-key :modality) #"SENSED",
+            {:user_id s/Str,
+             :acquisition_provenance         {(s/optional-key :modality) #"SENSED",
                                               :source_name s/Str,
                                               (s/optional-key :source_origin_id) s/Str}
              :creation_date_time_epoch_milli s/Int,
@@ -151,7 +152,7 @@
                                               :name      s/Str
                                               :namespace s/Str}
              :id                             s/Str}
-   :user_id s/Str,
+
    :_class  #"org.openmhealth.dsu.domain.DataPoint",
    :_id     s/Str
    :body    s/Any
