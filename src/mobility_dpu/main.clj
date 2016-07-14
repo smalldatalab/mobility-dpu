@@ -140,37 +140,22 @@
         get-users #(or (seq args) (users db))]
     (info "Create indexes if they did not exist ...")
     (maintain db)
-    ; Create a new thread to sync other shims sync tasks
-    (future
-      (loop []
-        (try
-          (sync-shims db (get-users))
-          ; sleep to avoid deplete the API quota
-          (Thread/sleep (* 1000 60 15))
-
-          (catch Exception e
-            (Thread/sleep 1000)
-            (warn e)
-            ))
-        (recur))
-      )
-    ; Create a new thread to sync Moves
-    (future
-      (loop []
-        (try
-          (sync-data-sources
-            db
-            [#(->MovesUserDatasource %)]
-            (get-users))
-          (catch Exception e
-            (Thread/sleep 1000)
-            (warn e)
-            ))
-        (recur)
-        )
-      )
-    ; sync Android and iOS mobility
     (loop []
+      (try
+        (sync-data-sources
+          db
+          [#(->MovesUserDatasource %)]
+          (get-users))
+        (catch Exception e
+          (Thread/sleep 1000)
+          (warn e)
+          ))
+      (try
+        (sync-shims db (get-users))
+        (catch Exception e
+          (Thread/sleep 1000)
+          (warn e)
+          ))
       (try
         (sync-data-sources
           db
