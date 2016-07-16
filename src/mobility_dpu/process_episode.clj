@@ -81,6 +81,7 @@
                                      ))
                               )
                  epsKM (* 0.001 epsMeters)
+                 ; use mutable hashset to improve efficiency
                  visited-set (HashSet.)
                  visit! (fn [node]
                          (.add visited-set (:start node)))
@@ -92,8 +93,12 @@
                           (.add clustered-set (:start node)))
                  clustered? (fn [node]
                           (.contains clustered-set (:start node)))
+
+
                  is-center? (memoize
                               (fn [node]
+                                "If a node qualifies as a center i.e. the total time it and and the nodes close to it
+                                have is over the threshold"
                                 (let [neighbors (filter
                                                   #(and (<= (spatial/haversine node %) epsKM))
                                                   nodes)
@@ -114,6 +119,7 @@
                                             )
 
                  get-neighbors (fn [node]
+                                 "get neighbors of a node (if it is a center)"
                                  (if (is-center? node)
                                    (remove #{node}
                                            (filter
@@ -122,6 +128,7 @@
                                  )
 
                  expand-nodes (fn expand-nodes [node, neighbors]
+                                "Expand a node to its neighbors and its neighbors' neighbor to form a cluster"
                                 (cluster! node)
                                 (loop [cluster [node] [neighbor & to-expands] neighbors]
                                   (if neighbor
@@ -169,11 +176,14 @@
                             )
                           )
                  clusters (dbscan nodes)
+                 ; create an individual cluster for those "noise" node
+                 ; (i.e. the place the user does not stay long enough to form a cluster)
                  ind-clusters (->> nodes
                                    (filter (complement clustered?))
                                    (map vector)
                                    )
                  clusters (into clusters ind-clusters)
+                 ; create a <start-time to cluster> map
                  start-time->cluster
                  (->>
                    (for [cluster clusters]
