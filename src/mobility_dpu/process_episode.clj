@@ -9,7 +9,8 @@
             [clj-time.format :as f])
   (:use [mobility-dpu.protocols])
   (:import (org.joda.time DateTime LocalDate)
-           (org.joda.time.format ISODateTimeFormat)))
+           (org.joda.time.format ISODateTimeFormat)
+           (java.util HashSet)))
 
 
 (timbre/refer-timbre)
@@ -80,58 +81,99 @@
                                      ))
                               )
                  epsKM (* 0.001 epsMeters)
-                 get-neighbors (fn [node]
-                                 (let [neighbors (filter
-                                                   #(and (<= (spatial/haversine node %) epsKM))
-                                                   nodes)
-                                       is-center? (>= (minutes-sum neighbors) minMinutes)
-                                       ]
-                                   (if is-center?
-                                     neighbors)
-                                   ))
+                 visited-set (HashSet.)
+                 visit! (fn [node]
+                         (.add visited-set (:start node)))
+                 visit? (fn [node]
+                          (.contains visited-set (:start node)))
 
-                 expand-nodes (fn expand-nodes [nodes-to-expand unvisited-nodes]
-                                (if-let [node (first nodes-to-expand)]
-                                  (let [new-nodes-to-expand
-                                        (if (unvisited-nodes node)
-                                          (get-neighbors node))
-                                        nodes-to-expand (disj (into nodes-to-expand new-nodes-to-expand) node)
-                                        unvisited-nodes (disj unvisited-nodes node)
-                                        ]
-                                    (cons node (lazy-seq (expand-nodes nodes-to-expand unvisited-nodes)))
+                 clustered-set (HashSet.)
+                 cluster! (fn [node]
+                          (.add clustered-set (:start node)))
+                 clustered? (fn [node]
+                          (.contains clustered-set (:start node)))
+                 is-center? (memoize
+                              (fn [node]
+                                (let [neighbors (filter
+                                                  #(and (<= (spatial/haversine node %) epsKM))
+                                                  nodes)
+                                      ]
+                                  (= :IS-CENTER
+                                    (reduce (fn [sum-mins next-node]
+                                              (let [sum-mins (+ (:duration next-node) sum-mins)]
+                                                (if (>= sum-mins minMinutes)
+                                                  (reduced :IS-CENTER)
+                                                  sum-mins
+                                                  )
+                                                )
+                                              )
+                                            0
+                                            neighbors
+                                            ))
+                                  ))
+                                            )
+
+                 get-neighbors (fn [node]
+                                 (if (is-center? node)
+                                   (remove #{node}
+                                           (filter
+                                             #(and (<= (spatial/haversine node %) epsKM))
+                                             nodes)))
+                                 )
+
+                 expand-nodes (fn expand-nodes [node, neighbors]
+                                (cluster! node)
+                                (loop [cluster [node] [neighbor & to-expands] neighbors]
+                                  (if neighbor
+                                    (let [cluster (if-not (clustered? neighbor)
+                                                    (do
+                                                      (cluster! neighbor)
+                                                      (conj cluster neighbor))
+                                                    cluster
+                                                    )
+                                          to-expands (if-not (visit? neighbor)
+                                                       (do
+                                                         (visit! neighbor)
+                                                         (if-let [more-neighbors
+                                                                  (remove
+                                                                    #(and (visit? %) (clustered? %))
+                                                                     (get-neighbors neighbor))
+
+                                                                  ]
+                                                           (into to-expands more-neighbors)
+                                                           to-expands
+                                                           )
+                                                         )
+                                                       to-expands
+                                                       )
+                                          ]
+                                      (recur cluster to-expands)
+                                      )
+                                    cluster
                                     )
                                   )
                                 )
                  dbscan (fn dbscan
-                          ([nodes]
-                           (let [nodes (into #{} nodes)]
-                             (dbscan nodes nodes)))
-                          ([unvisited-nodes unclustered-nodes]
-                           (if (not-empty unvisited-nodes)
-                             (let [cur (first unvisited-nodes)]
-                               (if-let [neighbors (get-neighbors cur)]
-                                 (let [expanded-cluster
-                                       (-> (disj (into #{} neighbors) cur)
-                                           (expand-nodes  unvisited-nodes)
-                                           (conj  cur))
-                                       ]
-                                   (cons (filter unclustered-nodes expanded-cluster)
-                                         (lazy-seq  (dbscan
-                                                      (apply disj unvisited-nodes expanded-cluster)
-                                                      (apply disj unclustered-nodes expanded-cluster))))
-                                   )
-                                 (lazy-seq  (dbscan
-                                              (disj unvisited-nodes cur)
-                                              unclustered-nodes))
-                                 )
-                               )
-                             ; make all the unclustered node as a single-node-cluster
-                             (map vector unclustered-nodes)
-                             ))
+                          [[node & rest-nodes]]
 
-
+                          (if node
+                            (if (visit? node)
+                              (lazy-seq  (dbscan rest-nodes))
+                              (do
+                                (visit! node)
+                                (if-let [neighbors (get-neighbors node)]
+                                  (lazy-seq (cons (expand-nodes node neighbors) (dbscan rest-nodes)) )
+                                  (lazy-seq  (dbscan rest-nodes))
+                                  ))
+                              )
+                            )
                           )
                  clusters (dbscan nodes)
+                 ind-clusters (->> nodes
+                                   (filter (complement clustered?))
+                                   (map vector)
+                                   )
+                 clusters (into clusters ind-clusters)
                  start-time->cluster
                  (->>
                    (for [cluster clusters]
