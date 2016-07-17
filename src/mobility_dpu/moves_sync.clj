@@ -156,26 +156,28 @@
               )
             ))
   ([user start til zone]
-
-   (let [end (t/plus start (t/days 6))
-         end (if (t/after? end til) til end)
-         response (client @storyline-endpoint {:query-params     {"username"  user
-                                                                 "dateStart" start
-                                                                 "dateEnd"   end
-                                                                 "normalize" "false"}
+    (loop [start start results []]
+      (let [end (t/plus start (t/days 6))
+            end (if (t/after? end til) til end)
+            response (client @storyline-endpoint {:query-params     {"username"  user
+                                                                     "dateStart" start
+                                                                     "dateEnd"   end
+                                                                     "normalize" "false"}
 
                                                   })
-         storylines (->> (get-in response [:body :body])
-                         (map #(assoc % :zone zone))
-                         (s/validate [MovesData])
-                         )
+            storylines (->> (get-in response [:body :body])
+                            (map #(assoc % :zone zone))
+                            (s/validate [MovesData])
+                            )
+            results  (into results storylines)
+            ]
+        (if (= end til)
+          results
+          (recur (t/plus start (t/days 7)) results))
 
-         ]
-     (if (= end til)
-       storylines
-       (concat storylines (lazy-seq
-                            (daily-storyline-sequence user (t/plus start (t/days 7)) til zone))))
-     )
+
+        ))
+
     )
   )
 
@@ -270,15 +272,29 @@
 (defn auth? [user]
   ((into #{} (get-auths user)) "moves"))
 
+(defn remove-duplicate [episodes]
+  (loop [[epi & rest-epis] (sort-by :start episodes)
+         key->index (transient {})
+         results [] ]
+    (if epi
+      (let [key (select-keys epi [:start :inferred-state])]
+        (if-let [index (key->index key)]
+          ; replace the previous instance
+          (recur rest-epis key->index (assoc results index epi))
+          ; add to the end of the vector
+          (recur rest-epis (assoc! key->index key (count results)) (conj results epi))
+          )
+        )
+      results)
+    )
+  )
 (s/defn ^:always-validate moves-extract-episodes :- (s/maybe [EpisodeSchema])
   [user :- s/Str]
   (if (auth? user)
     (->> (daily-storyline-sequence user)
          (mapcat :segments)
          (mapcat segment->episodes)
-
-         (group-by #(select-keys % [:start :inferred-state]))
-         (map (comp last second))
+         remove-duplicate
          (sort-by :start)
          ))
   )
