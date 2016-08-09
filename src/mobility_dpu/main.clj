@@ -36,7 +36,7 @@
 
         )
 
-      (catch Exception e (error e)))
+      (catch Throwable e (error e)))
     ; sleep to avoid polling service provider too fast
     ; FIXME use a more efficient throttle function?
     (Thread/sleep 5000)
@@ -106,7 +106,7 @@
           (when (sync-one-user user source purge-gps? db)
             ; store the last update time
             (swap! user-source->last-update assoc [user (source-name source)] last-raw-data-update-time))
-          (catch Exception e
+          (catch Throwable e
             (error  e (str "Sync failed: user " user " " (source-name source) " " last-raw-data-update-time))
             ))
         ;; do not process data, print out reason
@@ -129,7 +129,7 @@
 
   (let [db (loop []
              (if-let [db (try (mongodb)
-                          (catch Exception _
+                          (catch Throwable _
                             (info "Waiting for mongodb" (@config :mongodb-uri))
                             (Thread/sleep 1000)
                             nil
@@ -146,13 +146,13 @@
           db
           [#(->MovesUserDatasource %)]
           (get-users))
-        (catch Exception e
+        (catch Throwable e
           (Thread/sleep 1000)
           (warn e)
           ))
       (try
         (sync-shims db (get-users))
-        (catch Exception e
+        (catch Throwable e
           (Thread/sleep 1000)
           (warn e)
           ))
@@ -161,7 +161,7 @@
           db
           [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
           (get-users))
-        (catch Exception e
+        (catch Throwable e
           (Thread/sleep 1000)
           (warn e)
           ))

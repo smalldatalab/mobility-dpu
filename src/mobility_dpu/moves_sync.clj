@@ -13,12 +13,6 @@
            (org.joda.time.format ISODateTimeFormat DateTimeFormatter)))
 
 
-(def request-throttle (let [t1 (throttle/create-throttle! (t/hours 1) 1400)
-                            t2 (throttle/create-throttle! (t/minutes 1) 50)]
-                        (fn [f]
-                          (t1 #(t2 f))
-                          )
-                        ))
 (def authorizations-endpoint (delay (str (:shim-endpoint @config) "/authorizations")))
 (def moves-shim (delay (str (:shim-endpoint @config) "/data/moves/")))
 (def profile-endpoint (delay (str @moves-shim "profile")))
@@ -103,14 +97,15 @@
 (defn client [endpoint params]
   (loop []
     (let [{:keys [body status] :as res}
-          (request-throttle #(client/get
-                              endpoint
-                              (merge
-                                params
-                                {:as               :json
-                                 :throw-exceptions false})))]
+          (client/get
+            endpoint
+            (merge
+              params
+              {:as               :json
+               :throw-exceptions false}) )]
       (if (and (= 500 status)
                (.contains ^String body "429 Client Error (429)"))
+        ; making requests too frequently
        (do (Thread/sleep 60000)
            (recur))
        res)
