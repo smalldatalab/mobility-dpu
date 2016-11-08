@@ -150,24 +150,28 @@
           (Thread/sleep 1000)
           (warn e)
           ))
-      (try
-        (sync-shims db (get-users))
-        (catch Throwable e
-          (Thread/sleep 1000)
-          (warn e)
-          ))
-      (try
-        (sync-data-sources
-          db
-          [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
-          (get-users))
-        (catch Throwable e
-          (Thread/sleep 1000)
-          (warn e)
-          ))
-      (recur)
+            (recur)
       )
   )
+  )
+
+
+(comment
+  (try
+    (sync-shims db (get-users))
+    (catch Throwable e
+      (Thread/sleep 1000)
+      (warn e)
+      ))
+  (try
+    (sync-data-sources
+      db
+      [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
+      (get-users))
+    (catch Throwable e
+      (Thread/sleep 1000)
+      (warn e)
+      ))
   )
 
 

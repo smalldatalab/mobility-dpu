@@ -61,7 +61,7 @@
         (let [rows (mq/with-collection db coll
                                        (mq/find {"header.schema_id.name"      name
                                                  "header.schema_id.namespace" ns
-                                                 :user_id                     user})
+                                                 "header.user_id"                     user})
                                        (mq/keywordize-fields true)
                                        (mq/fields ["body" "header.creation_date_time"])
                                        (mq/sort {"header.creation_date_time_epoch_milli" 1})

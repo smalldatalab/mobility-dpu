@@ -102,7 +102,8 @@
     ))
 
 (s/defn trace-distance
-  "Return the trace's distance in km"
+  "Return the trace's distance in km with a speed upper-bound. Any movement that is over the upper-bound
+  is considered to be spurious data and ignored"
   [location-trace :- [LocationSample] & [speed-upper-bound-in-m-sec]]
   (loop [origin (first location-trace) [cur & rest] (rest location-trace) sum 0]
 
