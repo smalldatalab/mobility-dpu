@@ -167,7 +167,7 @@
         data-source (->MovesUserDatasource user-id)
         datapoints (summary/get-datapoints data-source  provided-home-loc)]
 
-    (time->str (json/generate-string datapoints))
+    (json/generate-string (time->str datapoints))
     )
   )
 
