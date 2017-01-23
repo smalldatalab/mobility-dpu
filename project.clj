@@ -1,4 +1,4 @@
-(defproject mobility-dpu "0.5.1"
+(defproject mobility-dpu "0.5.2"
   :description "Small data lab - Mobility DPU"
   :url "https://github.com/smalldatalab/mobility-dpu"
   :license {:name "Eclipse Public License"
