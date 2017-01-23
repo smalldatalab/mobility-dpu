@@ -7,15 +7,13 @@
         [mobility-dpu.android]
         [mobility-dpu.config]))
 (deftest test-parse-moves
-         (testing "If e can parse moves data correctly"
+         (testing "If we can parse moves data correctly"
                   (let [storylines (json/parse-string (slurp (clojure.java.io/resource "moves_storyline.json")) true)]
-
                     (is (->>
                           storylines
                           (mapcat :segments)
                           (mapcat moves/segment->episodes)
                           (s/validate [EpisodeSchema])
                           ))
-
                     )
                   ))

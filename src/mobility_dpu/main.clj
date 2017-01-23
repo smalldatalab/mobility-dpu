@@ -1,5 +1,8 @@
 (ns mobility-dpu.main
-  (:gen-class)
+  (:gen-class
+    :name mobility_dpu.api
+    :methods [#^{:static true} [movesDatapoints [String] String]
+              #^{:static true} [latestMovesDatapoint [String] org.joda.time.DateTime]])
   (:require [taoensso.timbre :as timbre]
             [taoensso.timbre.appenders.core :as appenders]
             [mobility-dpu.temporal :refer [dt-parser]]
@@ -8,14 +11,15 @@
             [mobility-dpu.home-location :as home]
             [clj-time.core :as t]
             [schema.core :as s]
-            [clj-time.coerce :as c])
+            [cheshire.core :as json])
   (:use [mobility-dpu.protocols]
         [mobility-dpu.android :only [->AndroidUserDatasource]]
         [mobility-dpu.ios :only [->iOSUserDatasource]]
         [mobility-dpu.moves-sync :only [->MovesUserDatasource]]
-        [mobility-dpu.database :only [mongodb]]
+        [mobility-dpu.database :only [mongodb time->str]]
         [mobility-dpu.config :only [config]]
-        [aprint.core]))
+        [aprint.core])
+  )
 
 ;; config logger
 (timbre/refer-timbre)
@@ -156,23 +160,20 @@
   )
 
 
-(comment
-  (try
-    (sync-shims db (get-users))
-    (catch Throwable e
-      (Thread/sleep 1000)
-      (warn e)
-      ))
-  (try
-    (sync-data-sources
-      db
-      [#(->AndroidUserDatasource % db) #(->iOSUserDatasource % db)]
-      (get-users))
-    (catch Throwable e
-      (Thread/sleep 1000)
-      (warn e)
-      ))
+;; TODO: Figure out how to let the caller specify the mongo uri and shim server url
+(defn -movesDatapoints [user-id]
+  (let [db (mongodb)
+        provided-home-loc (home/provided-home-location user-id db)
+        data-source (->MovesUserDatasource user-id)
+        datapoints (summary/get-datapoints data-source  provided-home-loc)]
+
+    (time->str (json/generate-string datapoints))
+    )
   )
 
 
-
+(defn -latestMovesDatapoint [user-id]
+  (let [data-source (->MovesUserDatasource user-id)]
+    (last-update data-source)
+    )
+  )

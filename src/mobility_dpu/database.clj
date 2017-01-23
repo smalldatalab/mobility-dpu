@@ -64,7 +64,7 @@
                                                  "header.user_id"                     user})
                                        (mq/keywordize-fields true)
                                        (mq/fields ["body" "header.creation_date_time"])
-                                       (mq/sort {"header.creation_date_time_epoch_milli" 1})
+                                       (mq/sort {"header.creation_date_time" 1})
 
                                        (mq/batch-size 10000)
                                        )]
@@ -76,43 +76,7 @@
             ))
         )
       (maintain [_]
-        (info "Ensure indexes ...")
-        (mc/ensure-index
-          db data-coll
-          (array-map  "user_id" 1,
-                      "header.schema_id.name"  1,
-                      "header.schema_id.namespace"  1,
-                      "header.creation_date_time_epoch_milli"  1
-                      )
-                         )
 
-        (mc/ensure-index
-          db offload-coll
-          (array-map  "user_id" 1,
-                      "header.schema_id.name"  1,
-                      "header.schema_id.namespace"  1,
-                      "header.creation_date_time_epoch_milli"  1
-                      )
-          )
-        (mc/ensure-index
-          db episode-cache-coll
-          (array-map  "user" 1,
-                      "device"  1)
-          )
-        (comment
-          (info "Migrate v1 summary to v2 ...")
-          ; convert old (v1) summary data point to v2
-          (doseq [old (->> (mq/with-collection
-                             db coll
-                             (mq/find {:header.schema_id.name "mobility-daily-summary"
-                                       :header.schema_id.version.major 1})
-                             (mq/keywordize-fields true)
-                             )
-                           (sort-by #(get-in % [:header :creation_date_time_epoch_milli])))]
-            (mc/save db coll (summary/v1->v2-summary old))
-            (mc/save db "mobilityOldSummary" old)
-            (mc/remove-by-id db coll (:_id old))
-            ))
         )
       (remove-until [_ ns name user date]
         (mc/remove

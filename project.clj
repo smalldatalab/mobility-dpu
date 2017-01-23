@@ -1,6 +1,6 @@
-(defproject mobility-dpu "0.4.3"
-  :description "Mobility DPU"
-  :url "http://example.com/FIXME"
+(defproject mobility-dpu "0.5.1"
+  :description "Small data lab - Mobility DPU"
+  :url "https://github.com/smalldatalab/mobility-dpu"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :target-path "target/%s"
@@ -9,15 +9,15 @@
              :test {:jvm-opts ["-Dmongodb.uri=mongodb://127.0.0.1/test"
                                "-Dlog.file=test-file.log"
                                "-Dgmap.geo.coding.server.key=test-key"
-                               "-Dshim.endpoint=test-endpoint"
+                               "-Dshim.endpoint=http://localhost:8083/"
                                "-Dsync.tasks=test2:type1,test1:type2,test2:type3"
                                ]
                     }}
   :jvm-opts ["-Xmx512m" "-server"]
-  :main mobility-dpu.main
+  :main mobility_dpu.api
   :plugins [[lein-localrepo "0.5.3"]
             [lein-environ "1.0.1"]]
-
+  :aot :all
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [aprint "0.1.1"]
                  [clj-time "0.7.0"]
