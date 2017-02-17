@@ -94,7 +94,7 @@
           ; functions to generate datapoints from different sources: Android, iOS, and Moves App
           source-fn data-sources]
     (let [source (source-fn user)
-          last-raw-data-update-time (last-update source)
+          last-raw-data-update-time (try (last-update source) (catch Exception _))
           last-process-time (get @user-source->last-update  [user (source-name source)])
           purge-gps? (remove-gps? db user)
           ]

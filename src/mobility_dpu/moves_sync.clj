@@ -136,7 +136,10 @@
                         [:body :body :profile])]
     (if profile
       {:first-date   (LocalDate/parse (:firstDate profile) date-format)
-       :current-zone (DateTimeZone/forID (get-in profile [:currentTimeZone :id]))})
+       :current-zone (DateTimeZone/forID (clojure.string/replace
+                                           (get-in profile [:currentTimeZone :id])
+                                           ; Moves return the wrong timezone id.... replace Asia/Yangon with Asia/Rangoon
+                                           "Yangon" "Rangoon"))})
     )
   )
 
